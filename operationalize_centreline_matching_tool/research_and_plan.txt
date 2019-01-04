@@ -1,0 +1,78 @@
+How will the website work ?
+
+Research: 
+
+This article goes through different types of cloud databases (not sure if I need this): 
+https://auth0.com/blog/the-complete-guide-to-deploying-javascript-applications-part-1/
+
+Definitions: 
+ CGI - common gateway interface. The common gateway interface (CGI) is a standard way 
+	   for a Web server to pass a Web user's request to an application program and to receive data back to forward to the user. 
+
+	   
+how to use python in HTML: 
+	- http://karrigell.sourceforge.net/en/pythoninsidehtml.html
+	- https://www.quora.com/How-do-I-incorporate-Python-into-HTML
+	- Most of the time ppl use templates
+			Templates work as a way to call HTML from a python script 
+			i.e.
+			template = Template(u"""<!DOCTYPE html>
+			<html>
+			<body>
+			Hello {{ name }}! The time is {{now}}.
+			</html>""")
+			print template.render(name='John Doe', now=now)
+			
+	- There is a way to use python similar to JS <script> tags in HTML, those tags look like <% code %>
+			this is called modpython, it is an Apache (a HTTP web server software) module that embeds the Python interpreter within the server
+	- modpython may not work that well since python cannot run on client (i.e. on a browser). Browsers only understand HTML, JS, and CSS
+	- There is something called pyjs, which translates your Python to JavaScript, which is then executed by clients' web browsers
+			- it's more for if you want to write a whole application in python and then translate it to javascript
+			- Which is not what I intend to do. I want to write everything in JS/HTML and then make one function call 
+			to my python function that returns a new csv
+	
+	
+How will I send data from python to JS ??
+
+	- Flask web framework (http://flask.pocoo.org/) or Django
+	
+	- but first, what is a web framework ???
+	The purpose of web frameworks is to hide the boilerplate and infrastructural code related to handling HTTP requests and responses. 
+	Just how much is hidden depends on the framework. Django and Flask represent two extremes. 
+	Django includes something for every situation, almost to its detriment. 
+	Flask bills itself as a "micro-framework" and handles the bare minimum of web application functionality,
+	relying on third-party packages to do some of the less common web framework tasks.
+
+	Remember, though, that at the end of the day, Python web frameworks all work the same way: 
+	they receive HTTP requests, dispatch code that generates HTML, and creates an HTTP response with that content. 
+	In fact, all major server-side frameworks work in this way (excluding JavaScript frameworks). 
+	Hopefully, you're now equipped to choose between frameworks as you understand their purpose.
+	
+	https://jeffknupp.com/blog/2014/03/03/what-is-a-web-framework/
+		
+	- an example of using python and flask together:
+		https://www.jitsejan.com/python-and-javascript-in-flask.html
+	
+	- talks about how to choose a framework when combining python and js
+	https://amontalenti.com/2012/06/14/web-app\
+	
+	Shows you how to start a website with a bit of python (flask):
+	https://www.probytes.net/blog/use-python-make-websites/
+	
+
+	
+JavaScript can also open a CSV and can perform sql queries. I looked into potentially using just JS and no python 
+	- how to connect to postgresql using JS: 
+	http://www.tothenew.com/blog/connect-to-postgresql-using-javascript/
+
+	- JS can read/write to CSV:
+	https://stackoverflow.com/questions/7431268/how-to-read-data-from-csv-file-using-javascript
+	
+	
+How to make a file downloadable: 
+	https://www.wikihow.com/Make-a-File-Downloadable-from-Your-Website
+	https://www.w3schools.com/howto/howto_html_download_link.asp
+	
+	
+Questions: 
+my script currently connects to my database account .... we might need a different one for the web app ??? 
