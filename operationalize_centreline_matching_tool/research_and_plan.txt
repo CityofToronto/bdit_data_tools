@@ -76,3 +76,16 @@ How to make a file downloadable:
 	
 Questions: 
 my script currently connects to my database account .... we might need a different one for the web app ??? 
+
+
+
+
+********************************** Outputting shapefile using HTML Issue
+https://gis.stackexchange.com/questions/29612/how-to-display-a-shapefile-on-a-browser-offline
+
+how to do it in JS:
+https://github.com/mapbox/shp-write
+
+outputting CSV: 
+https://community.plot.ly/t/allowing-users-to-download-csv-on-click/5550/7
+
