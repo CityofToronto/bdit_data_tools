@@ -24,7 +24,10 @@ con = connect(**dbset)
 
 
 def text_to_centreline(highway, fr, to): 
-    df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
+    if to != None:
+        df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
+    else:
+        df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, 'NULL'), con)
     return [df['confidence'].item(), df['geom'].item()]
 
 

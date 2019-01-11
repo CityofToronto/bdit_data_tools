@@ -62,17 +62,22 @@ app.layout = html.Div([
     html.Div(id='output-data-upload'), 
 ])
 
+
 def text_to_centreline(highway, fr, to): 
-    #df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
-    #return pd.Series(data=[df['confidence'].item(), df['geom'].item()])
-    df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to, highway, fr, to), con)
+    #if to != None:
+    df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
+    #else:
+    #df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, 'NULL'), con)
     return [highway, fr, to, df['confidence'].item(), df['geom'].item()]
 
 
 def get_rows(df):
     rows = []
     for index, row in df.iterrows():
+        #if df.shape[1] == 3:
         row_with_geom = text_to_centreline(row[0], row[1], row[2])
+        #elif df.shape[1] == 2:
+           # row_with_geom = text_to_centreline(row[0], row[1], None)
         #return row_with_geom 
         rows.append(row_with_geom)
     df = pd.DataFrame(data=rows)
@@ -96,15 +101,20 @@ def parse_contents(contents, filename):
             'There was an error processing this file.'
         ])
     
-
+    if df.shape[1] not in [2,3]:
+        return html.Div('Improper file layout. File must have 2 or 3 columns.')
+    
     data = get_rows(df)
     
     
-    
+    # change line terminator to a comma to make parsing the file easier later
+    # if you dont keep this, then the terminator will be an ampty string
+    # would cause it to be way more difficult to figure out where a row ends
+    # the last element of a row and the first element of the next row would be cosidered part of the same cell
     csv_string = data.to_csv(index=False, header=False, 
-                             encoding='utf-8' , line_terminator=',')
+                             encoding='utf-8', line_terminator="~!?")
 
-
+    
     # send the csv as a string to the download function 
     # download isnt a callback so we cant really send variables via components
     location =  "/download/newfile?value={}".format(csv_string)
@@ -112,9 +122,6 @@ def parse_contents(contents, filename):
     
     return html.Div([
         html.H5(filename),
-        html.H6(data.to_string()),
-        html.H6(csv_string),
-        html.H6(location),
         html.A('Download CSV', href=location),
         html.Hr(),  # horizontal line
     ])
@@ -125,29 +132,10 @@ def parse_contents(contents, filename):
 # this function will get run if "/download/newfile" is used 
 def download():
     csv_string = flask.request.args.get('value')
-    
 
-    # write where rows end
-    elements = csv_string.split(',')
-    
-    # remove none values from list
-    #elements = list(filter(lambda a: a != None, elements))
-    
-    # the new lines are not in the csv string
-    # put new lines into the string
-    lst = [i for i in range(4, len(elements)-1, 5)]
-    new_elements = [elements[i] + '\n' if i in lst else elements[i] for i in range(0, len(elements)-1)]
-    
-    
-    # make every 5th element a new line
-    #lst = [i for i in range(5, len(elements)-1, 6)]
-    #for i in lst: elements.insert(i, '\n') 
-            
-    csv_string = ','.join(new_elements)
-    
-    str_io = io.StringIO(csv_string, newline=None)
-    #str_io = io.StringIO(csv_string)
-    #pd.read_csv(str_io)
+    csv_string = csv_string.replace("~!?", '\n')
+      
+    str_io = io.StringIO(csv_string)
     
     mem = io.BytesIO()
     mem.write(str_io.getvalue().encode('utf-8'))
