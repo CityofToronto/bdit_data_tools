@@ -6,7 +6,6 @@
 
 from psycopg2 import connect
 import configparser
-import sys, os
 
 import dash
 from dash.dependencies import Input, Output, State
@@ -15,15 +14,14 @@ import dash_html_components as html
 import dash_table
 
 import base64
-from plotly import graph_objs as go
-from datetime import datetime as dt
-import json
+
+#import json
 #import text_to_centreline.py
 import pandas as pd
 import pandas.io.sql as psql
 
 import io
-import urllib as url
+
 
 import flask
 
@@ -33,10 +31,19 @@ CONFIG.read('db.cfg')
 dbset = CONFIG['DBSETTINGS']
 con = connect(**dbset)
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+#external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__) #, external_stylesheets=external_stylesheets)
 server = app.server
+
+app.config.supress_callback_exceptions = True
+app.config.update({
+    # remove the default of '/'
+    #'routes_pathname_prefix': '/download/newFile',
+
+    # remove the default of '/'
+    'requests_pathname_prefix': ''
+})
 
 
 app.layout = html.Div([
@@ -64,20 +71,20 @@ app.layout = html.Div([
 
 
 def text_to_centreline(highway, fr, to): 
-    #if to != None:
-    df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
-    #else:
-    #df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, 'NULL'), con)
+    if to != None:
+        df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
+    else:
+        df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', {})".format(highway, fr, 'NULL'), con)
     return [highway, fr, to, df['confidence'].item(), df['geom'].item()]
 
 
 def get_rows(df):
     rows = []
     for index, row in df.iterrows():
-        #if df.shape[1] == 3:
-        row_with_geom = text_to_centreline(row[0], row[1], row[2])
-        #elif df.shape[1] == 2:
-           # row_with_geom = text_to_centreline(row[0], row[1], None)
+        if df.shape[1] == 3:
+            row_with_geom = text_to_centreline(row[0], row[1], row[2])
+        elif df.shape[1] == 2:
+            row_with_geom = text_to_centreline(row[0], row[1], None)
         #return row_with_geom 
         rows.append(row_with_geom)
     df = pd.DataFrame(data=rows)
@@ -106,6 +113,17 @@ def parse_contents(contents, filename):
     
     data = get_rows(df)
     
+    #tbl = dash_table.DataTable(
+    #id='table',
+   #columns=[{"name": i, "id": i} for i in df.columns],
+    #data=df.to_dict("rows"),
+   # )
+   
+   
+       
+    #json_string = data.to_json(orient='split')
+    
+    
     
     # change line terminator to a comma to make parsing the file easier later
     # if you dont keep this, then the terminator will be an ampty string
@@ -118,10 +136,11 @@ def parse_contents(contents, filename):
     # send the csv as a string to the download function 
     # download isnt a callback so we cant really send variables via components
     location =  "/download/newfile?value={}".format(csv_string)
-    
-    
+
     return html.Div([
         html.H5(filename),
+        html.H6(df.shape),
+        #html.H6(json_string),
         html.A('Download CSV', href=location),
         html.Hr(),  # horizontal line
     ])
@@ -168,5 +187,3 @@ if __name__ == '__main__':
     
     
     
-    
-# last index and first value are the same -> fix this
