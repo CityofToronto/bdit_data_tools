@@ -1,9 +1,3 @@
-# how to run file : use anaconda
-# https://dash.plot.ly/getting-started
-
-# how to run file : use anaconda
-# https://dash.plot.ly/getting-started
-
 from psycopg2 import connect
 import configparser
 
@@ -11,7 +5,6 @@ import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
-import dash_table
 
 import base64
 
@@ -26,25 +19,25 @@ import io
 import flask
 
 
+
 CONFIG = configparser.ConfigParser()
 CONFIG.read('db.cfg')
 dbset = CONFIG['DBSETTINGS']
 con = connect(**dbset)
 
-#external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+app = dash.Dash(__name__)
 
-app = dash.Dash(__name__) #, external_stylesheets=external_stylesheets)
 server = app.server
+
 
 app.config.supress_callback_exceptions = True
 app.config.update({
     # remove the default of '/'
-    #'routes_pathname_prefix': '/download/newFile',
+    #'routes_pathname_prefix': '',
 
     # remove the default of '/'
     'requests_pathname_prefix': ''
 })
-
 
 app.layout = html.Div([
     dcc.Upload(
@@ -113,41 +106,33 @@ def parse_contents(contents, filename):
     
     data = get_rows(df)
     
-    #tbl = dash_table.DataTable(
-    #id='table',
-   #columns=[{"name": i, "id": i} for i in df.columns],
-    #data=df.to_dict("rows"),
-   # )
-   
-   
-       
-    #json_string = data.to_json(orient='split')
-    
-    
-    
     # change line terminator to a comma to make parsing the file easier later
     # if you dont keep this, then the terminator will be an ampty string
     # would cause it to be way more difficult to figure out where a row ends
     # the last element of a row and the first element of the next row would be cosidered part of the same cell
     csv_string = data.to_csv(index=False, header=False, 
                              encoding='utf-8', line_terminator="~!?")
+   
+	
+    #json_string = data.to_json(orient='split')
 
     
     # send the csv as a string to the download function 
     # download isnt a callback so we cant really send variables via components
-    location =  "/download/newfile?value={}".format(csv_string)
-
+    location =  "downloads/newfile?value={}".format(csv_string)
+    
+    
     return html.Div([
         html.H5(filename),
-        html.H6(df.shape),
-        #html.H6(json_string),
-        html.A('Download CSV', href=location),
+	html.H5(csv_string),
+	html.H5(location), 
+	html.A('Download CSV', href=location),
         html.Hr(),  # horizontal line
     ])
 
 # where I got inspiration from 
 # https://community.plot.ly/t/allowing-users-to-download-csv-on-click/5550/17
-@app.server.route("/download/newfile")
+@app.server.route("/downloads/newfile")
 # this function will get run if "/download/newfile" is used 
 def download():
     csv_string = flask.request.args.get('value')
@@ -180,10 +165,5 @@ def update_output_div(filename_list, contents_list):
             return new_file 
         else:
              return 'Insuffient file format, please enter a CSV or Excel file'
-        
 
-if __name__ == '__main__':
-    app.run_server(debug=True, port=8051)
-    
-    
-    
+            
