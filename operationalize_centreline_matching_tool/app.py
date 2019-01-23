@@ -12,10 +12,14 @@ import base64
 #import text_to_centreline.py
 import pandas as pd
 import pandas.io.sql as psql
+import geopandas as gpd
+from shapely.wkt import loads, dumps
 
+import shapefile
+import csv
 import io
-
-
+import json
+import geojson
 import flask
 
 
@@ -71,18 +75,53 @@ def text_to_centreline(highway, fr, to):
     return [highway, fr, to, df['confidence'].item(), df['geom'].item()]
 
 
+def load_geoms(row_with_wkt, i):
+    geom_wkt = row_with_wkt[i]
+    row_with_geom = row_with_wkt[:i]
+    if row_with_wkt[i] != None:
+    	row_with_geom.append(loads(row_with_wkt[i]))
+    else:
+    	row_with_geom.append(None)
+    return row_with_geom
+
+
 def get_rows(df):
     rows = []
     for index, row in df.iterrows():
         if df.shape[1] == 3:
-            row_with_geom = text_to_centreline(row[0], row[1], row[2])
+            row_with_wkt = text_to_centreline(row[0], row[1], row[2])
+	    # replace string WKT representation of geom with an object 
+	    row_with_geom = load_geoms(row_with_wkt, 4)
         elif df.shape[1] == 2:
-            row_with_geom = text_to_centreline(row[0], row[1], None)
+            row_with_null = text_to_centreline(row[0], row[1], None)
+	    row_with_wkt = [x for x in row_with_null if x is not None]
+            # replace string WKT representation of geom with an object
+	    row_with_geom = load_geoms(row_with_wkt, 3)
         #return row_with_geom 
         rows.append(row_with_geom)
-    df = pd.DataFrame(data=rows)
-    return df
-    
+    return gpd.GeoDataFrame(data=rows)
+
+
+
+def data2geojson(df):
+    features = []
+    if df.shape[1] == 3:
+	    df.columns = ["Street", "Between", "Confidence", "Geometry"]
+	    df.apply(lambda X: features.append(
+                geojson.Feature(geometry=X["Geometry"],
+		properties=dict(street=X["Street"], btwn=X["Between"], confidence=X["Confidence"]))), axis=1)
+
+    else:
+   	    df.columns = ["Street", "From",  "To", "Confidence", "Geometry"]
+            df.apply(lambda X: features.append(	
+                geojson.Feature(geometry=X["Geometry"],
+                properties=dict(street=X["Street"], frm=X["From"],to=X["To"],  confidence=X["Confidence"]))), axis=1)
+    return geojson.dumps(features)
+
+
+
+
+
 
 def parse_contents(contents, filename):
     content_type, content_string = contents.split(',')
@@ -119,22 +158,28 @@ def parse_contents(contents, filename):
     
     # send the csv as a string to the download function 
     # download isnt a callback so we cant really send variables via components
-    location =  "downloads/newfile?value={}".format(csv_string)
-    
+    csv_location =  "downloads/csv_file?value={}".format(csv_string)
+
+	
+    #shp_location = "downloads/shp_zip?value={}".format(csv_string)
     
     return html.Div([
         html.H5(filename),
 	html.H5(csv_string),
-	html.H5(location), 
-	html.A('Download CSV', href=location),
+	html.H5(csv_location),
+	html.H5(io.StringIO(decoded.decode('utf-8')).getvalue()), 
+	html.A('Download CSV', href=csv_location),
+#	html.A('Download Shapefile', href=shp_location),
         html.Hr(),  # horizontal line
+	html.H5(data.to_string()),
+	html.H5(data2geojson(df))
     ])
 
 # where I got inspiration from 
 # https://community.plot.ly/t/allowing-users-to-download-csv-on-click/5550/17
-@app.server.route("/downloads/newfile")
+@app.server.route("/downloads/csv_file")
 # this function will get run if "/download/newfile" is used 
-def download():
+def download_csv():
     csv_string = flask.request.args.get('value')
 
     csv_string = csv_string.replace("~!?", '\n')
@@ -149,6 +194,33 @@ def download():
                            mimetype='text/csv',
                            attachment_filename='downloadFile.csv',
                            as_attachment=True)
+
+
+
+
+
+@app.server.route("/downloads/shp_zip")
+def download_shp():
+    csv_string = flask.request.args.get('value')
+
+    csv_string = csv_string.replace("~!?", '\n')
+
+    reader = csv.DictReader(io.StringIO(csv_string))
+
+    json_str_io = io.StringIO(json.dumps(list(reader)))
+
+    mem = io.BytesIO()
+    mem.write(json_str_io.getvalue().encode('utf-8'))
+    mem.seek(0)
+    json_str_io.close()
+    return flask.send_file(mem,
+                           mimetype='application/json',
+                           attachment_filename='downloadFile.json',
+                           as_attachment=True)
+
+
+
+
 
     
 @app.callback(
