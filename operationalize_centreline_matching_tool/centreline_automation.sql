@@ -349,11 +349,8 @@ $geom$ LANGUAGE plpgSQL;
 
 
 
-
-
-
 CREATE OR REPLACE FUNCTION crosic.text_to_centreline(highway TEXT, frm TEXT, t TEXT) 
-RETURNS TABLE(centreline_segments GEOMETRY, con TEXT) AS $$ 
+RETURNS TABLE(centreline_segments TEXT, con TEXT) AS $$ 
 DECLARE 
 
 
@@ -549,7 +546,7 @@ DECLARE
 
 BEGIN 
 
-RETURN QUERY (SELECT centreline_segments, con);
+RETURN QUERY (SELECT ST_AsText(centreline_segments), con);
 
 
 END;
@@ -566,7 +563,7 @@ highway TEXT,
 frm TEXT, 
 t TEXT,
 confidence TEXT,
-geom GEOMETRY
+geom TEXT
 )
 AS $$
 BEGIN 
