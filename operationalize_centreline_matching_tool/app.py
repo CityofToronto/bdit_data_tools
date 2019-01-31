@@ -12,7 +12,7 @@ import base64
 #import text_to_centreline.py
 import pandas as pd
 import pandas.io.sql as psql
-import geopandas as gpd
+#import geopandas as gpd
 from shapely.wkt import loads, dumps
 
 import shapefile
@@ -99,7 +99,7 @@ def get_rows(df):
 	    row_with_geom = load_geoms(row_with_wkt, 3)
         #return row_with_geom 
         rows.append(row_with_geom)
-    return gpd.GeoDataFrame(data=rows)
+    return pd.DataFrame(data=rows)   #gpd.GeoDataFrame(data=rows)
 
 
 
@@ -109,6 +109,7 @@ def data2geojson(df):
 	    df.columns = ["Street", "Between", "Confidence", "Geometry"]
 	    df.apply(lambda X: features.append(
                 geojson.Feature(geometry=X["Geometry"],
+
 		properties=dict(street=X["Street"], btwn=X["Between"], confidence=X["Confidence"]))), axis=1)
 
     else:
@@ -161,18 +162,25 @@ def parse_contents(contents, filename):
     csv_location =  "downloads/csv_file?value={}".format(csv_string)
 
 	
-    #shp_location = "downloads/shp_zip?value={}".format(csv_string)
+
+    geojson_str = data2geojson(data)
+
+    geojson_location = "downloads/geojson?value{}".format(geojson_str)
+
     
+    shp_location = "downloads/shp_zip?value{}".format(geojson_str)
+
+
+
+   
     return html.Div([
-        html.H5(filename),
-	html.H5(csv_string),
-	html.H5(csv_location),
-	html.H5(io.StringIO(decoded.decode('utf-8')).getvalue()), 
-	html.A('Download CSV', href=csv_location),
-#	html.A('Download Shapefile', href=shp_location),
+        html.A('Download CSV', href=csv_location),
         html.Hr(),  # horizontal line
 	html.H5(data.to_string()),
-	html.H5(data2geojson(df))
+	html.H5(data2geojson(data)),
+        html.A('Download Geojson', href=geojson_location),
+	html.Hr(),
+	html.A('Download Shapefile', href=shp_location)
     ])
 
 # where I got inspiration from 
@@ -194,6 +202,26 @@ def download_csv():
                            mimetype='text/csv',
                            attachment_filename='downloadFile.csv',
                            as_attachment=True)
+     
+     
+       
+
+      
+@app.server.route("/downloads/geojson")
+def download_geojson(): 
+    
+    json_string = flask.request.args.get('value')
+    
+    str_io = io.StringIO(json_string)
+    
+    mem = io.BytesIO()
+    mem.write(str_io.getvalue().encode('utf-8'))
+    mem.seek(0)
+    str_io.close()
+    return flask.send_file(mem,
+                           mimetype='application/json',
+                           attachment_filename='downloadFile.geojson',
+                           as_attachment=True)
 
 
 
@@ -201,22 +229,20 @@ def download_csv():
 
 @app.server.route("/downloads/shp_zip")
 def download_shp():
-    csv_string = flask.request.args.get('value')
 
-    csv_string = csv_string.replace("~!?", '\n')
+    json_string = flask.request.args.get('value')
 
-    reader = csv.DictReader(io.StringIO(csv_string))
-
-    json_str_io = io.StringIO(json.dumps(list(reader)))
+    str_io = io.StringIO(json_string)
 
     mem = io.BytesIO()
-    mem.write(json_str_io.getvalue().encode('utf-8'))
+    mem.write(str_io.getvalue().encode('utf-8'))
     mem.seek(0)
-    json_str_io.close()
+    str_io.close()
     return flask.send_file(mem,
                            mimetype='application/json',
-                           attachment_filename='downloadFile.json',
+                           attachment_filename='downloadFile1.geojson',
                            as_attachment=True)
+
 
 
 
