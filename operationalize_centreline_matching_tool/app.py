@@ -1,13 +1,14 @@
 from psycopg2 import connect
 import configparser
-
+import tempfile
 import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
-
+import zipfile
 import base64
-
+import datetime
+import time
 #import json
 #import text_to_centreline.py
 import pandas as pd
@@ -22,6 +23,7 @@ import json
 import geojson
 import flask
 
+from geoJ import GeoJ
 
 
 CONFIG = configparser.ConfigParser()
@@ -163,12 +165,12 @@ def parse_contents(contents, filename):
 
 	
 
-    geojson_str = data2geojson(data)
+    geojson_str = '{ "type":"FeatureCollection", "features":' + data2geojson(data) + '}'
 
-    geojson_location = "downloads/geojson?value{}".format(geojson_str)
+    geojson_location = "downloads/geojson?value={}".format(geojson_str)
 
     
-    shp_location = "downloads/shp_zip?value{}".format(geojson_str)
+    shp_location = "downloads/shp_zip?value={}".format(geojson_str)
 
 
 
@@ -177,7 +179,7 @@ def parse_contents(contents, filename):
         html.A('Download CSV', href=csv_location),
         html.Hr(),  # horizontal line
 	html.H5(data.to_string()),
-	html.H5(data2geojson(data)),
+	html.H5(geojson_str),
         html.A('Download Geojson', href=geojson_location),
 	html.Hr(),
 	html.A('Download Shapefile', href=shp_location)
@@ -210,7 +212,7 @@ def download_csv():
 @app.server.route("/downloads/geojson")
 def download_geojson(): 
     
-    json_string = flask.request.args.get('value')
+    json_string = flask.request.args.get('value') 
     
     str_io = io.StringIO(json_string)
     
@@ -226,21 +228,79 @@ def download_geojson():
 
 
 
+# This method is used to create the columns names read from the geoJSON file
+def createColumns(columnsList, w):
+    for i in columnsList:
+    	# Field names cannot be unicode.
+    	# That is why I cast it to string.
+    	w.field(str(i), 'C')
 
 @app.server.route("/downloads/shp_zip")
 def download_shp():
-
+    
     json_string = flask.request.args.get('value')
+    #geojson_io = io.StringIO(json_string)
+    #gJ = GeoJ(geojson_io)
+    geojson_file = json.loads(json_string)
+    # imitialize io
+    shp = io.BytesIO()
+    shx = io.BytesIO()
+    dbf = io.BytesIO()
+    prj = io.StringIO()
 
-    str_io = io.StringIO(json_string)
 
+    # parse the geojson 
+    columnsList = geojson_file['features'][0]['properties'].keys()
+    geometries = [] 
+    attributes = []
+    attributesPerF = []
+    for i in geojson_file['features']:
+
+    	if i['geometry']['type'] == 'LineString':
+                geometries.append(i['geometry']['coordinates'])
+                for j in columnsList:
+                    attributesPerF.append(str(i['properties'][str(j)]))
+                attributes.append(attributesPerF)
+                attributesPerF = []
+    # create line
+    with tempfile.NamedTemporaryFile() as tmp:
+    	tmp_name = tmp.name 
+    w = shapefile.Writer(shp=shp, shx=shx, dbf=dbf)
+    createColumns(columnsList, w)
+    for i in geometries:
+    	w.line([i])
+
+    for j in attributes:
+    	w.record(*j)
+
+
+       # now save the created shapefile from writer 
+    w.close()
+     
+    #gJ.toShp(shp, shx, dbf, prj)
+    
+
+
+
+    #str_io =  io.StringIO(json_string)
     mem = io.BytesIO()
-    mem.write(str_io.getvalue().encode('utf-8'))
+    with zipfile.ZipFile(mem, 'w') as zf:
+    #files = [shp, shx, dbf]
+    	filenames = ['centreline_download.dbf', 'centreline_download.shp', 'centreline_download.shx']
+        files = [dbf, shp, shx]
+    	for i in range(0, len(filenames)): 
+        	data = zipfile.ZipInfo(filenames[i])
+        	data.date_time = time.localtime(time.time())[:6]
+        	data.compress_type = zipfile.ZIP_DEFLATED
+        	zf.writestr(data, files[i].getvalue())
+
+
+    # mem.write(str_io.getvalue().encode('utf-8'))
+    #mem.write(shp.getvalue())
     mem.seek(0)
-    str_io.close()
+    #str_io.close()
     return flask.send_file(mem,
-                           mimetype='application/json',
-                           attachment_filename='downloadFile1.geojson',
+                           attachment_filename='downloadFile1.zip',
                            as_attachment=True)
 
 
@@ -259,8 +319,8 @@ def update_output_div(filename_list, contents_list):
         return ''
     else:
         if filename_list[0].split('.')[1] == 'csv' or filename_list[0].split('.')[1] == 'xlsx':
-            new_file = [parse_contents(c, f) for c, f in zip(contents_list, filename_list)]
-            return new_file 
+           new_file = [parse_contents(c, f) for c, f in zip(contents_list, filename_list)]
+           return new_file 
         else:
              return 'Insuffient file format, please enter a CSV or Excel file'
 
