@@ -5,6 +5,7 @@ import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table
 import zipfile
 import base64
 import datetime
@@ -146,6 +147,11 @@ def parse_contents(contents, filename):
     if df.shape[1] not in [2,3]:
         return html.Div('Improper file layout. File must have 2 or 3 columns.')
     
+    # in case if there is a random row with a value missing or a row with no values
+    df = df.dropna(axis=0) 
+    
+  
+     
     data = get_rows(df)
     
     # change line terminator to a comma to make parsing the file easier later
@@ -172,15 +178,18 @@ def parse_contents(contents, filename):
     
     shp_location = "downloads/shp_zip?value={}".format(geojson_str)
 
-
+    no_geom = data.drop(['Geometry'], axis=1)
 
    
     return html.Div([
-        html.A('Download CSV', href=csv_location),
-        html.Hr(),
-        html.A('Download Geojson', href=geojson_location),
-        html.Hr(),
-	html.A('Download Shapefile', href=shp_location)
+        html.Div(id='tbl', children=[dash_table.DataTable(
+    	id='table',
+        columns=[{"name": i, "id": i} for i in no_geom.columns],
+    	data=no_geom.to_dict("rows"),
+	)]),
+        html.Div(id='csv', children=[html.A('Download CSV', href=csv_location)]),
+        html.Div(id='geoj', children=[html.A('Download Geojson', href=geojson_location)]),
+	html.Div(id='shp', children=[html.A('Download Shapefile', href=shp_location)])
     ])
 
 # where I got inspiration from 
@@ -257,13 +266,14 @@ def download_shp():
     attributes = []
     attributesPerF = []
     for i in geojson_file['features']:
+    
 
-    	if i['geometry']['type'] == 'LineString':
+    	if i['geometry'] is not None and i['geometry']['type'] == 'LineString':
                 geometries.append(i['geometry']['coordinates'])
-                for j in columnsList:
-                    attributesPerF.append(str(i['properties'][str(j)]))
-                attributes.append(attributesPerF)
-                attributesPerF = []
+        	for j in columnsList:
+                	attributesPerF.append(str(i['properties'][str(j)]))
+        	attributes.append(attributesPerF)
+        	attributesPerF = []
     # create line
     with tempfile.NamedTemporaryFile() as tmp:
     	tmp_name = tmp.name 
