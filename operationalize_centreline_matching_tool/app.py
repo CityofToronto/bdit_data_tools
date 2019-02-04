@@ -177,11 +177,9 @@ def parse_contents(contents, filename):
    
     return html.Div([
         html.A('Download CSV', href=csv_location),
-        html.Hr(),  # horizontal line
-	html.H5(data.to_string()),
-	html.H5(geojson_str),
+        html.Hr(),
         html.A('Download Geojson', href=geojson_location),
-	html.Hr(),
+        html.Hr(),
 	html.A('Download Shapefile', href=shp_location)
     ])
 
@@ -235,6 +233,10 @@ def createColumns(columnsList, w):
     	# That is why I cast it to string.
     	w.field(str(i), 'C')
 
+def createPrjFile(str_io):
+ 	prjStr = 'PROJCS["NAD_1983_UTM_Zone_17N",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-81],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["Meter",1]]'
+        str_io.write(prjStr)
+
 @app.server.route("/downloads/shp_zip")
 def download_shp():
     
@@ -246,7 +248,7 @@ def download_shp():
     shp = io.BytesIO()
     shx = io.BytesIO()
     dbf = io.BytesIO()
-    prj = io.StringIO()
+    prj = io.BytesIO()
 
 
     # parse the geojson 
@@ -274,20 +276,17 @@ def download_shp():
     	w.record(*j)
 
 
-       # now save the created shapefile from writer 
+    # now save the created shapefile from writer 
     w.close()
-     
-    #gJ.toShp(shp, shx, dbf, prj)
     
 
+    # create prj file 
+    createPrjFile(prj)
 
-
-    #str_io =  io.StringIO(json_string)
     mem = io.BytesIO()
     with zipfile.ZipFile(mem, 'w') as zf:
-    #files = [shp, shx, dbf]
-    	filenames = ['centreline_download.dbf', 'centreline_download.shp', 'centreline_download.shx']
-        files = [dbf, shp, shx]
+    	filenames = ['centreline_download.dbf', 'centreline_download.shp', 'centreline_download.shx', 'centreline_download.prj']
+        files = [dbf, shp, shx, prj]
     	for i in range(0, len(filenames)): 
         	data = zipfile.ZipInfo(filenames[i])
         	data.date_time = time.localtime(time.time())[:6]
@@ -298,6 +297,10 @@ def download_shp():
     # mem.write(str_io.getvalue().encode('utf-8'))
     #mem.write(shp.getvalue())
     mem.seek(0)
+    prj.close()
+    shx.close()
+    dbf.close()
+    shp.close()
     #str_io.close()
     return flask.send_file(mem,
                            attachment_filename='downloadFile1.zip',
