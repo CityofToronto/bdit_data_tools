@@ -32,7 +32,11 @@ CONFIG.read('db.cfg')
 dbset = CONFIG['DBSETTINGS']
 con = connect(**dbset)
 
+
+external_stylesheets=['stylesheet.css']
+
 app = dash.Dash(__name__)
+
 
 server = app.server
 
@@ -207,9 +211,10 @@ def download_csv():
     mem.write(str_io.getvalue().encode('utf-8'))
     mem.seek(0)
     str_io.close()
+    now = datetime.datetime.now()
     return flask.send_file(mem,
                            mimetype='text/csv',
-                           attachment_filename='downloadFile.csv',
+                           attachment_filename='centreline_matcher_{}.csv'.format(now),
                            as_attachment=True)
      
      
@@ -227,9 +232,10 @@ def download_geojson():
     mem.write(str_io.getvalue().encode('utf-8'))
     mem.seek(0)
     str_io.close()
+    now = str(datetime.datetime.now())
     return flask.send_file(mem,
                            mimetype='application/json',
-                           attachment_filename='downloadFile.geojson',
+                           attachment_filename='centreline_matcher_{}.geojson'.format(now),
                            as_attachment=True)
 
 
@@ -293,9 +299,11 @@ def download_shp():
     # create prj file 
     createPrjFile(prj)
 
+    now = str(datetime.datetime.now())
+    
     mem = io.BytesIO()
     with zipfile.ZipFile(mem, 'w') as zf:
-    	filenames = ['centreline_download.dbf', 'centreline_download.shp', 'centreline_download.shx', 'centreline_download.prj']
+    	filenames = ['centreline_matcher_{}.dbf'.format(now), 'centreline_matcher_{}.shp'.format(now), 'centreline_matcher_{}.shx'.format(now), 'centreline_matcher_{}.prj'.format(now)]
         files = [dbf, shp, shx, prj]
     	for i in range(0, len(filenames)): 
         	data = zipfile.ZipInfo(filenames[i])
@@ -313,7 +321,7 @@ def download_shp():
     shp.close()
     #str_io.close()
     return flask.send_file(mem,
-                           attachment_filename='downloadFile1.zip',
+                           attachment_filename='centreline_matcher_{}.zip'.format(now),
                            as_attachment=True)
 
 
