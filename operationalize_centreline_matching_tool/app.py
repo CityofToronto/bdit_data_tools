@@ -24,16 +24,12 @@ import json
 import geojson
 import flask
 
-from geoJ import GeoJ
-
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read('db.cfg')
 dbset = CONFIG['DBSETTINGS']
 con = connect(**dbset)
 
-
-external_stylesheets=['stylesheet.css']
 
 app = dash.Dash(__name__)
 
@@ -51,6 +47,7 @@ app.config.update({
 })
 
 app.layout = html.Div([
+    html.H1("Toronto Centreline Matcher"), 
     dcc.Upload(
         id='upload-data',
         children=html.Div([
@@ -65,7 +62,8 @@ app.layout = html.Div([
             'borderStyle': 'dashed',
             'borderRadius': '5px',
             'textAlign': 'center',
-            'margin': 'auto'
+            'margin': 'auto', 
+            'font-family':'Aller, sans-serif, Times New Roman'
         },
         # Allow multiple files to be uploaded
         multiple=True
@@ -91,6 +89,14 @@ def load_geoms(row_with_wkt, i):
     	row_with_geom.append(None)
     return row_with_geom
 
+def get_headers(df):
+    if len(df.columns) == 5:
+    	return ['Id', 'Street', 'Between', 'Confidence', 'Geometry']
+    if len(df.columns) == 6:
+        return ['Id', 'Street','From', 'To', 'Confidence', 'Geometry']
+    else:
+	return True
+
 
 def get_rows(df):
     rows = []
@@ -112,20 +118,19 @@ def get_rows(df):
 
 def data2geojson(df):
     features = []
-    if df.shape[1] == 3:
-	    df.columns = ["Street", "Between", "Confidence", "Geometry"]
+    if df.shape[1] == 5:
+	    df.columns = ["Id", "Street", "Between", "Confidence", "Geometry"]
 	    df.apply(lambda X: features.append(
                 geojson.Feature(geometry=X["Geometry"],
 
-		properties=dict(street=X["Street"], btwn=X["Between"], confidence=X["Confidence"]))), axis=1)
+		properties=dict(ID=X["Id"],street=X["Street"], btwn=X["Between"], confidence=X["Confidence"]))), axis=1)
 
     else:
-   	    df.columns = ["Street", "From",  "To", "Confidence", "Geometry"]
+   	    df.columns = ["Id", "Street", "From",  "To", "Confidence", "Geometry"]
             df.apply(lambda X: features.append(	
                 geojson.Feature(geometry=X["Geometry"],
-                properties=dict(street=X["Street"], frm=X["From"],to=X["To"],  confidence=X["Confidence"]))), axis=1)
+                properties=dict(ID=X["Id"], street=X["Street"], frm=X["From"],to=X["To"],  confidence=X["Confidence"]))), axis=1)
     return geojson.dumps(features)
-
 
 
 
@@ -155,14 +160,16 @@ def parse_contents(contents, filename):
     df = df.dropna(axis=0) 
     
   
-     
     data = get_rows(df)
+
+    data.insert(loc=0,column=1000, value=pd.Series(data=[i for i in range(0, len(data.columns))]))
     
+
     # change line terminator to a comma to make parsing the file easier later
     # if you dont keep this, then the terminator will be an ampty string
     # would cause it to be way more difficult to figure out where a row ends
     # the last element of a row and the first element of the next row would be cosidered part of the same cell
-    csv_string = data.to_csv(index=False, header=False, 
+    csv_string = data.to_csv(index=False, header=get_headers(data), 
                              encoding='utf-8', line_terminator="~!?")
    
 	
@@ -175,10 +182,9 @@ def parse_contents(contents, filename):
 
 	
 
-    geojson_str = '{ "type":"FeatureCollection", "features":' + data2geojson(data) + '}'
+    geojson_str = '{"type":"FeatureCollection", "features":' + data2geojson(data) + '}'
 
     geojson_location = "downloads/geojson?value={}".format(geojson_str)
-
     
     shp_location = "downloads/shp_zip?value={}".format(geojson_str)
 
@@ -212,6 +218,10 @@ def download_csv():
     mem.seek(0)
     str_io.close()
     now = datetime.datetime.now()
+    now = str(now).replace('.', '_', 4)
+    now = str(now).replace(' ', '_', 4)
+    now = str(now).replace('-', '_', 4)
+
     return flask.send_file(mem,
                            mimetype='text/csv',
                            attachment_filename='centreline_matcher_{}.csv'.format(now),
@@ -233,6 +243,10 @@ def download_geojson():
     mem.seek(0)
     str_io.close()
     now = str(datetime.datetime.now())
+    now = now.replace('.', '_', 4)
+    now = now.replace(' ', '_', 4)    
+    now = now.replace('-', '_', 4)
+
     return flask.send_file(mem,
                            mimetype='application/json',
                            attachment_filename='centreline_matcher_{}.geojson'.format(now),
@@ -240,16 +254,32 @@ def download_geojson():
 
 
 
+def get_indexes(columnsList):
+    if 'to' in columnsList:
+    	return [columnsList.index('ID'), columnsList.index('Street'), columnsList.index('To'), columnsList.index('From'), columnsList.index('Confidence'), columnsList.index('Geometry')]
+    else:
+	return [columnsList.index('ID'), columnsList.index('Street'), columnsList.index('Between'), columnsList.index('Confidence'), columnsList.index('Geometry')]
+
+def get_columns_list(columnsList): 
+    if 'to' in columnsList:
+        return ['ID', 'street', 'to', 'frm', 'confidence']
+    else:
+        return ['ID', 'street', 'between', 'confidence']
+
 
 # This method is used to create the columns names read from the geoJSON file
 def createColumns(columnsList, w):
-    for i in columnsList:
+    if 'To' in columnsList:
+	ordered_col_lst = ['ID', 'Street', 'To', 'From', 'Confidence', 'Geometry']
+    else:
+        ordered_col_lst = ['ID', 'Street', 'Between', 'Confidence', 'Geometry']
+    for i in ordered_col_lst:
     	# Field names cannot be unicode.
     	# That is why I cast it to string.
     	w.field(str(i), 'C')
 
 def createPrjFile(str_io):
- 	prjStr = 'PROJCS["NAD_1983_UTM_Zone_17N",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-81],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["Meter",1]]'
+ 	prjStr = 'PROJCS["MTM_3Degree",GEOGCS["GCS_North_American_1927",DATUM["D_North_American_1927",SPHEROID["Clarke_1866",6378206.4,294.9786982]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.017453292519943295]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",304800.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-79.5],PARAMETER["Scale_Factor",0.9999],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]'
         str_io.write(prjStr)
 
 @app.server.route("/downloads/shp_zip")
@@ -276,7 +306,7 @@ def download_shp():
 
     	if i['geometry'] is not None and i['geometry']['type'] == 'LineString':
                 geometries.append(i['geometry']['coordinates'])
-        	for j in columnsList:
+        	for j in get_columns_list(columnsList):
                 	attributesPerF.append(str(i['properties'][str(j)]))
         	attributes.append(attributesPerF)
         	attributesPerF = []
@@ -300,7 +330,10 @@ def download_shp():
     createPrjFile(prj)
 
     now = str(datetime.datetime.now())
-    
+    now = now.replace('.', '_', 4)
+    now = now.replace(' ', '_', 4)
+    now = now.replace('-', '_', 4)
+
     mem = io.BytesIO()
     with zipfile.ZipFile(mem, 'w') as zf:
     	filenames = ['centreline_matcher_{}.dbf'.format(now), 'centreline_matcher_{}.shp'.format(now), 'centreline_matcher_{}.shx'.format(now), 'centreline_matcher_{}.prj'.format(now)]
