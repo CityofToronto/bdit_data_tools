@@ -1,0 +1,111 @@
+h1{
+        text-align:left;
+        font-family:Tahoma, Geneva, sans-serif;
+        color:#00579C;
+        font-size:50px; 
+	display:inline-block;
+	margin-left:10px; 
+}
+
+h2{
+ 	text-align:center;
+        font-family:Tahoma, Geneva, sans-serif;
+ 	color:#00579C;
+        font-size:50px;
+	margin-top:150px;
+
+}
+
+
+header{
+background-color:white;
+width:100%;
+background-size:cover;
+}
+
+
+
+.upload_class{
+ 	width:90%;
+        height: 200px;
+        line-height: 60px;
+	background-color:white;
+	
+	/*
+        outline:2px dashed black;
+	outline-offset:-10px;*/
+        text-align: center;
+	vertical-align: middle;
+	line-height:200px;
+        margin: 0 auto;
+        font-family:Tahoma, Geneva, sans-serif;
+	font-size: 300%;
+	color: #A9A9A9;
+	position:fixed;
+	margin-top:125px;
+	box-shadow: 2px 2px 2px 2px #888888;
+
+}
+.upload_class:hover{
+	background-color:#DCDCDC;
+}
+
+.upload_class:active {
+        box-shadow: 2px 2px 2px 2px #888888;
+        transform: translateY(4px);
+}
+
+h3{
+	color:#00579C;
+        font-size:50px;
+	text-align:left;
+	margin-left:85px;
+	margin-top:150px;
+	margin-bottom:100px;
+	font-family:Tahoma, Geneva, sans-serif;
+}
+
+h4{
+        color:#00579C;
+        font-size:50px;
+        text-align:left;
+        margin-left:85px;
+        margin-top:75px;
+        font-family:Tahoma, Geneva, sans-serif;
+}
+
+
+a{
+/*	font-weight:bold; */
+}
+
+.download_button:link, .download_button:visited {
+  background-color:#00579C;
+  color: white;
+  padding: 30px 165px;
+  text-align: center; 
+  text-decoration: none;
+  display: inline-block;
+  font-family:Tahoma, Geneva, sans-serif;
+  margin-left: 85px;
+  margin-right:85px;
+  margin-bottom:100px;
+  box-shadow: 0 9px #999;
+}
+
+.download_button:hover {
+  	background-color:blue;
+}
+
+ .download_button:active {
+	background-color:blue;
+	box-shadow: 0 5px #666;
+  	transform: translateY(4px);
+}
+
+.tbl{
+	margin-right:85px;
+	margin-left:85px;
+
+}
+
