@@ -34,6 +34,7 @@ con = connect(**dbset)
 app = dash.Dash(__name__)
 
 
+
 server = app.server
 
 
@@ -43,33 +44,48 @@ app.config.update({
     #'routes_pathname_prefix': '',
 
     # remove the default of '/'
-    'requests_pathname_prefix': ''
+    'requests_pathname_prefix': '/centreline-matcher/'
 })
 
-app.layout = html.Div([
-    html.H1("Toronto Centreline Matcher"), 
+
+app.layout = html.Div(
+children=[
+    html.Header(children=[
+        html.Img(id='logo', src='data:image/png;base64,{}'.format(base64.b64encode(open('images/logo_with_centreline.PNG', 'rb').read())), width=100, height=75),
+        html.H1('Toronto Centreline Matcher')
+    ]),
+    html.Div(id='view1', children=[
+    html.H2(children=['Convert text descriptions of locations to Toronto Centreline geometry']),
+
+
     dcc.Upload(
         id='upload-data',
+        className='upload_class',
         children=html.Div([
-            'Drag and Drop or ',
-            html.A('Select a CSV or Excel File')
+            'Drag and Drop a (.csv or.xlsx) file or ',
+            html.A(id='select_file', children='click here')
         ]),
-        style={
-            'width': '75%',
-            'height': '60px',
-            'lineHeight': '60px',
-            'borderWidth': '1px',
-            'borderStyle': 'dashed',
-            'borderRadius': '5px',
-            'textAlign': 'center',
-            'margin': 'auto', 
-            'font-family':'Aller, sans-serif, Times New Roman'
-        },
         # Allow multiple files to be uploaded
         multiple=True
     ),
-    html.Div(id='output-data-upload'), 
-])
+    html.H4(id='input_description', children=["Examples of correctly formatted files:"]),
+    html.Div(id='format_imgs', children=[
+    html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('images/from_to_image.png', 'rb').read())), width=700, height=200, style={'marginLeft':85, 'marginRight':125}),
+    html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('images/btwn_image.png', 'rb').read())), width=800, height=200, style={'marginLeft':125, 'marginRight':0})
+    ])
+	]), 
+    html.Div(id='output-data-upload')
+
+], style={'marginTop':0, 'marginBottom':0,'marginLeft':0,'marginRight':0, 'padding':0, 'width':'100%'})
+
+
+@app.server.route('/static/<path:path>')
+def static_file(path):
+    static_folder = os.path.join(os.getcwd(), 'static')
+    return send_from_directory(static_folder, path)
+
+
+
 
 
 def text_to_centreline(highway, fr, to): 
@@ -136,6 +152,7 @@ def data2geojson(df):
 
 
 
+
 def parse_contents(contents, filename):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -192,14 +209,22 @@ def parse_contents(contents, filename):
 
    
     return html.Div([
-        html.Div(id='tbl', children=[dash_table.DataTable(
+        html.H3("View your data with the confidence level of the match:"),
+        html.Div(className='tbl', children=[dash_table.DataTable(
     	id='table',
         columns=[{"name": i, "id": i} for i in no_geom.columns],
-    	data=no_geom.to_dict("rows"),
+    	data=no_geom.to_dict("rows"),  
+        style_as_list_view=True,
+        style_cell={'font-family':'Tahoma, Geneva, sans-serif', 'height':75},
+        style_header={'fontWeight':'bold'},
+
 	)]),
-        html.Div(id='csv', children=[html.A('Download CSV', href=csv_location)]),
-        html.Div(id='geoj', children=[html.A('Download Geojson', href=geojson_location)]),
-	html.Div(id='shp', children=[html.A('Download Shapefile', href=shp_location)])
+        html.H3("Download your data:"),
+        html.Div(className='download_links',
+		children=[html.A('Download CSV', href=csv_location, className='download_button'),
+		html.A('Download Geojson', href=geojson_location, className='download_button'),
+		html.A('Download Shapefile', href=shp_location, className='download_button' )]
+	)
     ])
 
 # where I got inspiration from 
