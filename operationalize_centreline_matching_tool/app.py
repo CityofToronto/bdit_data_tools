@@ -51,10 +51,12 @@ app.config.update({
 app.layout = html.Div(
 children=[
     html.Header(children=[
-        html.Img(id='logo', src='data:image/png;base64,{}'.format(base64.b64encode(open('images/logo_with_centreline.PNG', 'rb').read())), width=100, height=75),
+        html.Img(id='logo', src='data:image/png;base64,{}'.format(base64.b64encode(open('assets/images/logo_with_centreline.PNG', 'rb').read())), width=100, height=75),
         html.H1('Toronto Centreline Matcher')
     ]),
-    html.Div(id='view1', children=[
+
+    html.Div(className='split left', children=[
+    
     html.H2(children=['Convert text descriptions of locations to Toronto Centreline geometry']),
 
 
@@ -68,15 +70,19 @@ children=[
         # Allow multiple files to be uploaded
         multiple=True
     ),
-    html.H4(id='input_description', children=["Examples of correctly formatted files:"]),
-    html.Div(id='format_imgs', children=[
-    html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('images/from_to_image.png', 'rb').read())), width=700, height=200, style={'marginLeft':85, 'marginRight':125}),
-    html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('images/btwn_image.png', 'rb').read())), width=800, height=200, style={'marginLeft':125, 'marginRight':0})
-    ])
-	]), 
+    html.H4(id='input_description', children=["Examples of correctly formatted files:"]),   # 250 300 with 100 height 
+    html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('assets/images/from_to_image.png', 'rb').read())), width=500, height=150, style={'marginLeft':90,'marginBottom':5, 'marginRight':'50%'}),
+    html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('assets/images/btwn_image.png', 'rb').read())), width=600, height=150, style={'marginLeft':90, 'marginRight':'50%'})
+	
+	]
+   #	, 
+   #   style={'background-image':url("/centreline-matcher/assets/images/greyscale_background.PNG")}, 
+   #html.Img(src='data:image/png;base64,{}'.format(base64.b64encode(open('images/greyscale_background.PNG', 'rb').read())))}
+	),
+    #html.Div(id='view2') 
     html.Div(id='output-data-upload')
 
-], style={'marginTop':0, 'marginBottom':0,'marginLeft':0,'marginRight':0, 'padding':0, 'width':'100%'})
+], style={'marginTop':0, 'marginBottom':0,'marginLeft':0,'marginRight':0,  'padding':0, 'width':'100%'})
 
 
 @app.server.route('/static/<path:path>')
@@ -208,8 +214,17 @@ def parse_contents(contents, filename):
     no_geom = data.drop(['Geometry'], axis=1)
 
    
-    return html.Div([
-        html.H3("View your data with the confidence level of the match:"),
+    return html.Div(className="output", children=[
+	
+	html.Div(className="split right", children=[html.H3("Download your data:"),
+        	html.Div(className='download_links',
+                	children=[html.A('Download CSV', href=csv_location, className='download_button'),
+                	html.A('Download Geojson', href=geojson_location, className='download_button'),
+                	html.A('Download Shapefile', href=shp_location, className='download_button' )]
+        	)]), 
+
+	html.Div(className="review-contents", 
+	children=[html.Div(className='tbl_title', children="View your data below with the confidence level of the match:"),
         html.Div(className='tbl', children=[dash_table.DataTable(
     	id='table',
         columns=[{"name": i, "id": i} for i in no_geom.columns],
@@ -218,13 +233,7 @@ def parse_contents(contents, filename):
         style_cell={'font-family':'Tahoma, Geneva, sans-serif', 'height':75},
         style_header={'fontWeight':'bold'},
 
-	)]),
-        html.H3("Download your data:"),
-        html.Div(className='download_links',
-		children=[html.A('Download CSV', href=csv_location, className='download_button'),
-		html.A('Download Geojson', href=geojson_location, className='download_button'),
-		html.A('Download Shapefile', href=shp_location, className='download_button' )]
-	)
+	)])])
     ])
 
 # where I got inspiration from 
