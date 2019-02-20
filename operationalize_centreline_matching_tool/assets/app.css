@@ -1,27 +1,81 @@
+@import url("https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700");
+
+
 h1{
-    text-align:left;
-    font-family:Tahoma, Geneva, sans-serif;
     color:#00579C;
     font-size:50px; 
-    display:inline-block;
-    margin-left:10px; 
+    display:inline;
+    margin-left:10px;
+    padding:0;
+    overflow-y:auto; 
 }
 
-h2{
-    text-align: center;
-    font-family: Tahoma, Geneva, sans-serif;
-    color:#00579C;
-    font-size:45px;
-    padding-left:2%;
-    padding-right:2%;
 
+
+h5{
+	font-size:20px;
+	text-indent:115px;
+	margin-top:0px;
 }
+
 
 
 header{
-background-color:white;
+background-image:linear-gradient(to right,  white 0%,white 70%, #00579C 70%, #00579C 100%);
 width:100%;
 background-size:cover;
+}
+
+
+summary::-webkit-details-marker{
+	display:none;
+	font-size:30px;
+}
+
+
+
+summary:after {
+  background:#00579C; 
+  border-radius: 10px; 
+  content: "+"; 
+  color: #fff; 
+  float: left; 
+  font-size: 1.5em; 
+  font-weight: bold; 
+  margin: -5px 10px 10px 10px; 
+  padding: 0; 
+  text-align: center; 
+  width: 20px;
+}
+
+details[open] summary:after {
+ 	content: "-";
+}
+
+
+details {
+    border: 1px solid #E1E1E1;
+    border-radius: 5px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+    color: #363636;
+    margin: 3% 3% 3% 3%;
+    padding: 1%;
+}
+
+
+.page-container{
+	font-family: 'Open Sans', sans-serif;
+	padding:0;
+	max-width:100%;
+	margin:0px 0px 0px 0px;
+}
+
+
+
+.header-split{
+	height:100%;
+	width:100%;
+	background-image:linear-gradient(to right,  white 0%,white 70%, #00579C 70%, #00579C 100%);
 }
 
 
@@ -30,37 +84,51 @@ background-size:cover;
     background-color:white;
     color:#00579C;
     height: 750px;
+    padding-bottom:2%;
+    width:70%;
 }
 
 .split {
     padding-top:2%;
-    padding-bottom:2%;
-    width:50%;
     position:relative;
     z-index:1;
     max-height:100%;
     margin-bottom:50px;
 }
 
+
+.right-page{
+	height:968px;
+	width:30%;
+	float:left;
+	background-color:#00579C;
+	position:relative;
+
+}
+
+
 .right {
-    float: left;
+    position:absolute;
+    z-index:10;
+    float:left;
     background-color:#00579C;
     color:white;
-    height:750px;
+    height:800px;
+    width:25%;
+    margin-left:70%;
 }
 
 
 .upload_class{
     width:80%;
-    height:200px;
+    height:40%;
     background-color: white;
     text-align:center;
     line-height:200px;
-    font-family:Tahoma, Geneva, sans-serif;
-    font-size:200%;
+    font-size:250%;
     margin-left:90px;
     color:#A9A9A9;
-    margin-top:5px;
+    padding-top:5%;
     box-shadow:2px 2px 2px 2px #888888;
     overflow:hidden;
 }
@@ -75,16 +143,16 @@ background-size:cover;
 }
 
 h3{
+    margin-top:10px;
+    margin-bottom:5px;
     font-size: 35px;
-    font-family: Tahoma, Geneva, sans-serif;
 }
 
 h4{
-        color:#00579C;
-	font-size:35px;
-		text-align:left;
-		margin-left:85px;
-		font-family:Tahoma, Geneva, sans-serif;
+	font-size:30px;
+	text-align:left;
+	margin-left:85px;
+
 }
 
 
@@ -92,14 +160,13 @@ h4{
 .download_button:link, .download_button:visited {
   background-color:white;
   color: #00579C;
-  padding: 30px 165px;
+  padding: 5% 25%;
   text-align: center; 
   text-decoration: none;
   display: inline-block;
-  font-family:Tahoma, Geneva, sans-serif;
-  margin-left:85px;
-  margin-right:85px;
-  margin-bottom:100px;
+  margin-left:10%;
+  margin-right:10%;
+  margin-bottom:7%;
   box-shadow:0px 9px #999;
 }
 
@@ -115,19 +182,24 @@ h4{
 
 .output {
     text-align: center;
+    background-image:linear-gradient(to right,  white 0%,white 70%, #00579C 70%, #00579C 100%);
+
 }
 
 .tbl{
-    margin-top: 20px;
+    z-index:12;
+    position:absolute;
+    
+    margin-top: 75%;
+    width:80%;
     margin-bottom: 50px;
-    margin-right: 85px;
-    margin-left: 85px;
+    margin-right: 12.5%;
+    margin-left: 12.5%;
 }
 
 .tbl_title{
     text-align: center;
     font-size: 35px;
-    font-family: Tahoma, Geneva, sans-serif;
     font-weight: bold;
 }
 
@@ -136,4 +208,5 @@ h4{
     color:rgb(0, 87, 156);
     bottom:0px;
     text-align:center;
+    background-color:lightblue;
 }
