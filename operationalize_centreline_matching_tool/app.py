@@ -23,7 +23,7 @@ import io
 import json
 import geojson
 import flask
-
+import os
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read('db.cfg')
@@ -33,7 +33,7 @@ con = connect(**dbset)
 
 app = dash.Dash(__name__)
 
-
+app.secret_key=os.urandom(16)
 
 server = app.server
 
@@ -172,55 +172,85 @@ def parse_contents(contents, filename):
     try:
         if 'csv' in filename:
             # Assume that the user uploaded a CSV file
-            df = pd.read_csv(
-                io.StringIO(decoded.decode('utf-8')))
+            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
         elif 'xlsx' in filename:
             # Assume that the user uploaded an excel file
             df = pd.read_excel(io.BytesIO(decoded))
     except Exception as e:
         print(e)
         return html.Div([
-            'There was an error processing this file.'
+            html.Div(className="split right",children=[html.H3('There was an error processing this file.')])
         ])
     
     if df.shape[1] not in [2,3]:
         return html.Div(className="split right",children=[html.H3('Improper file layout'), html.Br(), html.H3('File must have 2 or 3 columns.')])
-    
-    # in case if there is a random row with a value missing or a row with no values
-    df = df.dropna(axis=0) 
+   
+    try: 
+    	# in case if there is a random row with a value missing or a row with no values
+    	df = df.dropna(axis=0) 
     
   
-    data = get_rows(df)
+    	data = get_rows(df)
 
-    data.insert(loc=0,column=1000, value=pd.Series(data=[i for i in range(0, len(data.columns))]))
-    
-
-    # change line terminator to a comma to make parsing the file easier later
-    # if you dont keep this, then the terminator will be an ampty string
-    # would cause it to be way more difficult to figure out where a row ends
-    # the last element of a row and the first element of the next row would be cosidered part of the same cell
-    csv_string = data.to_csv(index=False, header=get_headers(data), 
-                             encoding='utf-8', line_terminator="~!?")
-   
 	
+	# insert ID field 
+    	data.insert(loc=0,column=1000, value=pd.Series(data=[i for i in range(0, data.shape[0])]))
+    
+    except Exception as e:
+    	return html.Div(e)
+
+
+    try:
+    	# change line terminator to a comma to make parsing the file easier later
+    	# if you dont keep this, then the terminator will be an ampty string
+    	# would cause it to be way more difficult to figure out where a row ends
+    	# the last element of a row and the first element of the next row would be cosidered part of the same cell
+    	csv_string = data.to_csv(index=False, header=get_headers(data), 
+                             encoding='utf-8', line_terminator="~!?")
+    except:
+	return html.Div(children=[html.Div("Error processing data into csv string"), html.Br(), html.Div(data.to_str())])
+
     #json_string = data.to_json(orient='split')
 
+    try: 
     
-    # send the csv as a string to the download function 
-    # download isnt a callback so we cant really send variables via components
-    csv_location =  "downloads/csv_file?value={}".format(csv_string)
+    	# send the csv as a string to the download function 
+    	# download isnt a callback so we cant really send variables via components
 
+
+   	csv_location =  "downloads/csv_file?value={}".format(csv_string)
+	#csv_location =  "downloads/csv_file"
+
+
+    except:
+    	return html.Div("Error loading csv URL")
+
+    try:	
+
+    	geojson_str = '{"type":"FeatureCollection", "features":' + data2geojson(data) + '}'
+
+
+    except Exception as e:
+    	return html.Div(str(e))
+
+    try:
+    	geojson_location = "downloads/geojson?value={}".format(geojson_str)
+    	
+	#geojson_location = "downloads/geojson"
+
+
+    	shp_location = "downloads/shp_zip?value={}".format(geojson_str)
 	
+	#shp_location = "downloads/shp_zip"
 
-    geojson_str = '{"type":"FeatureCollection", "features":' + data2geojson(data) + '}'
+    	no_geom = data.drop(['Geometry'], axis=1)
 
-    geojson_location = "downloads/geojson?value={}".format(geojson_str)
-    
-    shp_location = "downloads/shp_zip?value={}".format(geojson_str)
+    except:
+    	return html.Div("Error with getting urls")
+	
+    #session['geoj_str'] = geojson_str
+    #session['csv_str'] = csv_string
 
-    no_geom = data.drop(['Geometry'], axis=1)
-
-   
     return html.Div(className="output", children=[
 	
 	html.Div(className="split right", children=[
