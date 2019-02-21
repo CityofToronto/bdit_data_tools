@@ -55,7 +55,7 @@ children=[
     html.Header(children=[
         html.Img(id='logo', src='data:image/png;base64,{}'.format(base64.b64encode(open('assets/images/logo_with_centreline.PNG', 'rb').read())), width=100, height=75),
         html.H1('Toronto Centreline Matcher'),
-	html.H5(children=['Convert text descriptions of locations to Toronto Centreline geometry'])
+	html.H5(children=['Convert location descriptions to Toronto Centreline geometry'])
 
 
     ]),
@@ -66,7 +66,7 @@ children=[
         id='upload-data',
         className='upload_class',
         children=html.Div([
-            'Drag and Drop a (.csv or.xlsx) file or ',
+            'Drag and drop a (.csv or.xlsx) file or ',
             html.A(id='select_file', children='click here')
         ]),
         # Allow multiple files to be uploaded
@@ -184,7 +184,7 @@ def parse_contents(contents, filename):
         ])
     
     if df.shape[1] not in [2,3]:
-        return html.Div('Improper file layout. File must have 2 or 3 columns.')
+        return html.Div(className="split right",children=[html.H3('Improper file layout'), html.Br(), html.H3('File must have 2 or 3 columns.')])
     
     # in case if there is a random row with a value missing or a row with no values
     df = df.dropna(axis=0) 
@@ -225,12 +225,15 @@ def parse_contents(contents, filename):
 	
 	html.Div(className="split right", children=[
 	html.H3("Preview Your Data:"),
-	html.A("Preview", href="#table", className='download_button'),
+	html.Br(),
+	html.A("Preview           ", href="#table", className='download_button'),
+	html.Br(),
 	html.H3("Or"),
-	html.H3("Download your data:"),
+	html.Br(),
+	html.H3("Download Your Data:"),
         	html.Div(className='download_links',
-                	children=[html.A('Download CSV', href=csv_location, className='download_button'),
-                	html.A('Download Geojson', href=geojson_location, className='download_button'),
+                	children=[html.A('Download CSV      ', href=csv_location, className='download_button'),
+                	html.A('Download Geojson  ', href=geojson_location, className='download_button'),
                 	html.A('Download Shapefile', href=shp_location, className='download_button' ), 
 ]
         	)]), 

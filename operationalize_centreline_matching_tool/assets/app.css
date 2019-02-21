@@ -29,7 +29,6 @@ background-size:cover;
 
 summary::-webkit-details-marker{
 	display:none;
-	font-size:30px;
 }
 
 
@@ -40,16 +39,17 @@ summary:after {
   content: "+"; 
   color: #fff; 
   float: left; 
-  font-size: 1.5em; 
+  font-size: 1.3em; 
   font-weight: bold; 
-  margin: -5px 10px 10px 10px; 
+  margin: -5px 10px 0 0; 
   padding: 0; 
   text-align: center; 
-  width: 20px;
+  width: 25px;
 }
 
 details[open] summary:after {
  	content: "-";
+	font-size:1.3em;
 }
 
 
@@ -60,6 +60,7 @@ details {
     color: #363636;
     margin: 3% 3% 3% 3%;
     padding: 1%;
+    font-size:25px;
 }
 
 
@@ -68,6 +69,9 @@ details {
 	padding:0;
 	max-width:100%;
 	margin:0px 0px 0px 0px;
+	background-image:linear-gradient(to right,  white 0%,white 70%, #00579C 70%, #00579C 100%);
+	overflow-x:hidden;
+	overflow-y:hidden;
 }
 
 
@@ -86,6 +90,7 @@ details {
     height: 750px;
     padding-bottom:2%;
     width:70%;
+    margin:0px 0px 0px 0px;
 }
 
 .split {
@@ -111,11 +116,13 @@ details {
     position:absolute;
     z-index:10;
     float:left;
-    background-color:#00579C;
+    background-color:transparent;
     color:white;
-    height:800px;
-    width:25%;
+    height:80%;
+    max-width:30%;
     margin-left:70%;
+    text-align:center;
+    overflow-x:hidden;
 }
 
 
@@ -145,7 +152,8 @@ details {
 h3{
     margin-top:10px;
     margin-bottom:5px;
-    font-size: 35px;
+    font-size: 45px;
+    text-align:center;
 }
 
 h4{
@@ -158,43 +166,45 @@ h4{
 
 
 .download_button:link, .download_button:visited {
+  font-size:30px;
   background-color:white;
-  color: #00579C;
-  padding: 5% 25%;
+  padding: 2% 30%; 
   text-align: center; 
   text-decoration: none;
   display: inline-block;
-  margin-left:10%;
-  margin-right:10%;
-  margin-bottom:7%;
-  box-shadow:0px 9px #999;
+  margin-top:7%;
+  margin-right:5%;
+  margin-left:5%;
+  margin-bottom:2%;
+  box-shadow:0px 3px #999;
+  color:black;
+  font-family:'Open Sans', sans-serif;
 }
 
 .download_button:hover {
-  	background-color:blue;
+  	background-color:#555;
+	cursor:pointer;
+	color:white;
 }
 
- .download_button:active {
-	background-color:blue;
+.download_button:active {
+	background-color:black;
 	box-shadow: 0 5px #666;
   	transform: translateY(4px);
+	color:white;
 }
 
 .output {
-    text-align: center;
-    background-image:linear-gradient(to right,  white 0%,white 70%, #00579C 70%, #00579C 100%);
-
+background:transparent;
 }
 
 .tbl{
-    z-index:12;
     position:absolute;
-    
-    margin-top: 75%;
-    width:80%;
-    margin-bottom: 50px;
-    margin-right: 12.5%;
-    margin-left: 12.5%;
+    width:85%;
+    margin-bottom: 200px;
+    margin-top:75%;
+    margin-left:7%;
+    margin-right:7%;
 }
 
 .tbl_title{
@@ -205,8 +215,6 @@ h4{
 
 
 .review-contents {
-    color:rgb(0, 87, 156);
     bottom:0px;
     text-align:center;
-    background-color:lightblue;
 }
