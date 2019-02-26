@@ -10,11 +10,8 @@ import zipfile
 import base64
 import datetime
 import time
-#import json
-#import text_to_centreline.py
 import pandas as pd
 import pandas.io.sql as psql
-#import geopandas as gpd
 from shapely.wkt import loads, dumps
 
 import shapefile
@@ -25,6 +22,15 @@ import geojson
 import flask
 import os
 
+
+import logging
+from logging.handlers import RotatingFileHandler
+
+
+from signal import signal, SIGPIPE, SIG_DFL
+
+
+
 CONFIG = configparser.ConfigParser()
 CONFIG.read('db.cfg')
 dbset = CONFIG['DBSETTINGS']
@@ -33,12 +39,9 @@ con = connect(**dbset)
 
 app = dash.Dash(__name__)
 
-app.secret_key=os.urandom(16)
-
 server = app.server
 
-
-app.config.supress_callback_exceptions = True
+#app.config.supress_callback_exceptions = True
 app.config.update({
     # remove the default of '/'
     #'routes_pathname_prefix': '',
@@ -46,6 +49,7 @@ app.config.update({
     # remove the default of '/'
     'requests_pathname_prefix': '/centreline-matcher/'
 })
+
 
 
 app.layout = html.Div(className='page-container',
@@ -167,20 +171,19 @@ def data2geojson(df):
 
 
 def parse_contents(contents, filename):
+    app.server.logger.info("made it to the begginning of the parse_contents function")
+
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     try:
         if 'csv' in filename:
             # Assume that the user uploaded a CSV file
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
+            df = pd.read_csv(io.StringIO(decoded.decode('ISO-8859-1')), error_bad_lines=False)
         elif 'xlsx' in filename:
             # Assume that the user uploaded an excel file
             df = pd.read_excel(io.BytesIO(decoded))
     except Exception as e:
-        print(e)
-        return html.Div([
-            html.Div(className="split right",children=[html.H3('There was an error processing this file.')])
-        ])
+        return html.Div(className="split right",children=str(e))
     
     if df.shape[1] not in [2,3]:
         return html.Div(className="split right",children=[html.H3('Improper file layout'), html.Br(), html.H3('File must have 2 or 3 columns.')])
@@ -251,6 +254,8 @@ def parse_contents(contents, filename):
     #session['geoj_str'] = geojson_str
     #session['csv_str'] = csv_string
 
+    app.logger.info("about to return buttons and output")
+
     return html.Div(className="output", children=[
 	
 	html.Div(className="split right", children=[
@@ -285,20 +290,30 @@ def parse_contents(contents, filename):
 @app.server.route("/downloads/csv_file")
 # this function will get run if "/download/newfile" is used 
 def download_csv():
-    csv_string = flask.request.args.get('value')
+    try:
 
-    csv_string = csv_string.replace("~!?", '\n')
+	app.logger.info('Starting the download CSV process')
+
+    	csv_string = flask.request.args.get('value')
+
+    	csv_string = csv_string.replace("~!?", '\n')
       
-    str_io = io.StringIO(csv_string)
+    	str_io = io.StringIO(csv_string)
     
-    mem = io.BytesIO()
-    mem.write(str_io.getvalue().encode('utf-8'))
-    mem.seek(0)
-    str_io.close()
-    now = datetime.datetime.now()
-    now = str(now).replace('.', '_', 4)
-    now = str(now).replace(' ', '_', 4)
-    now = str(now).replace('-', '_', 4)
+    	mem = io.BytesIO()
+    	mem.write(str_io.getvalue().encode('utf-8'))
+    	mem.seek(0)
+    	str_io.close()
+    	now = datetime.datetime.now()
+    	now = str(now).replace('.', '_', 4)
+    	now = str(now).replace(' ', '_', 4)
+    	now = str(now).replace('-', '_', 4)
+
+	app.logger.info('about to send CSV file')
+
+    except Exception as e:
+        return html.Div(str(e))
+
 
     return flask.send_file(mem,
                            mimetype='text/csv',
@@ -312,6 +327,8 @@ def download_csv():
 @app.server.route("/downloads/geojson")
 def download_geojson(): 
     
+    app.logger.info("Starting the download GeoJson process")
+
     json_string = flask.request.args.get('value') 
     
     str_io = io.StringIO(json_string)
@@ -324,6 +341,8 @@ def download_geojson():
     now = now.replace('.', '_', 4)
     now = now.replace(' ', '_', 4)    
     now = now.replace('-', '_', 4)
+
+    app.logger.info("about to send geojson file")
 
     return flask.send_file(mem,
                            mimetype='application/json',
@@ -363,6 +382,8 @@ def createPrjFile(str_io):
 @app.server.route("/downloads/shp_zip")
 def download_shp():
     
+    app.logger.info("about to start shapfile process")
+
     json_string = flask.request.args.get('value')
     #geojson_io = io.StringIO(json_string)
     #gJ = GeoJ(geojson_io)
@@ -431,6 +452,10 @@ def download_shp():
     dbf.close()
     shp.close()
     #str_io.close()
+    
+
+    app.logger.info("about to send shape zip file")
+
     return flask.send_file(mem,
                            attachment_filename='centreline_matcher_{}.zip'.format(now),
                            as_attachment=True)
@@ -447,13 +472,14 @@ def download_shp():
     [State('upload-data', 'contents')]
 )
 def update_output_div(filename_list, contents_list):
+    app.logger.info("at beginning of callback function")
     if filename_list == None:
         return ''
     else:
         if filename_list[0].split('.')[1] == 'csv' or filename_list[0].split('.')[1] == 'xlsx':
+	   signal(SIGPIPE, SIG_DFL)
            new_file = [parse_contents(c, f) for c, f in zip(contents_list, filename_list)]
            return new_file 
         else:
              return 'Insuffient file format, please enter a CSV or Excel file'
-
-            
+           
