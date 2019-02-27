@@ -36,7 +36,7 @@ app = dash.Dash(__name__)
 
 server = app.server
 
-#app.config.supress_callback_exceptions = True
+app.config.supress_callback_exceptions = True
 app.config.update({
     # remove the default of '/'
     #'routes_pathname_prefix': '',
@@ -47,9 +47,9 @@ app.config.update({
 
 
 if __name__ != '__main__':
-    gunicorn_logger = logging.getLogger('gunicorn.error')
-    app.logger.handlers = gunicorn_logger.handlers
-    app.logger.setLevel(gunicorn_logger.level)
+	gunicorn_logger = logging.getLogger('gunicorn.error')
+	app.logger.handlers = gunicorn_logger.handlers
+	app.logger.setLevel(gunicorn_logger.level)
 
 
 
@@ -110,13 +110,13 @@ def static_file(path):
 def text_to_centreline(highway, fr, to): 
     if to != None:
 	try:
-        	df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
+        	df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway.replace("'", ""), fr.replace("'", ""), to.replace("'", "")), con)
     	except Exception as e:
 		app.logger.error("error making database call: " + str(e))
 		raise Exception("Error making DB call: " + str(e))
     else:
 	try:   
-     		df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', {})".format(highway, fr, 'NULL'), con)
+     		df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', {})".format(highway.replace("'", ""), fr.replace("'", ""), 'NULL'), con)
 	except Exception as e:
 		app.logger.error("error making database call: " + str(e))
 		raise Exception("Error making DB call: " + str(e))
@@ -124,6 +124,16 @@ def text_to_centreline(highway, fr, to):
 
 
 def load_geoms(row_with_wkt, i):
+    """
+    Replace string WKT geometry representation with a geometry object
+
+    Parameters:    
+    row_with_wkt (list): list that represents a row of data with a WKT geometry representation
+    i (int): index of the WKT geometry
+
+    Returns: 
+    row_with_geom (list): List that represents row_with_wkt with the WKT geometry replaced with a geometry object
+    """
     try:
     	geom_wkt = row_with_wkt[i]
     	row_with_geom = row_with_wkt[:i]
@@ -132,11 +142,15 @@ def load_geoms(row_with_wkt, i):
     	else:
     		row_with_geom.append(None)
     except Exception as e:
+        app.logger.info("i value at error: " + str(i))
+        app.logger.info("row_with_wkt at error: " + str(row_with_wkt))
 	app.logger.error("Error in load_geoms: " + str(e))
 	raise Exception("Error in load_geoms: " + str(e))
     return row_with_geom
 
+
 def get_headers(df):
+    """returns header names for dataframes"""
     if len(df.columns) == 5:
     	return ['Id', 'Street', 'Between', 'Confidence', 'Geometry']
     if len(df.columns) == 6:
@@ -146,6 +160,7 @@ def get_headers(df):
 
 
 def get_rows(df):
+    """Matches each row of dataframe (df) to a centreline geometry and ocnfidence level of match"""
     rows = []
     total_rows = df.shape[0]
     for index, row in df.iterrows():
@@ -161,19 +176,19 @@ def get_rows(df):
 	    	row_with_geom = load_geoms(row_with_wkt, 4)
             elif df.shape[1] == 2:
             	row_with_null = text_to_centreline(row[0], row[1], None)
-	    	row_with_wkt = [x for x in row_with_null if x is not None]
+		row_with_wkt = row_with_null[:2] + row_with_null[3:]
             	# replace string WKT representation of geom with an object
 	    	row_with_geom = load_geoms(row_with_wkt, 3)
         	# return row_with_geom 
             rows.append(row_with_geom)
 	except Exception as e:
-	    app.logger.error("Exception with calling text_to_centreline")
-	    app.logger.info(str(e))
+	    app.logger.error("Exception with calling text_to_centreline: " + str(e))
     return pd.DataFrame(data=rows)   #gpd.GeoDataFrame(data=rows)
 
 
 
 def data2geojson(df):
+    """Converts a dataframe to a string formatted as a geojson"""
     features = []
     if df.shape[1] == 5:
 	    df.columns = ["Id", "Street", "Between", "Confidence", "Geometry"]
@@ -195,6 +210,20 @@ def data2geojson(df):
 
 
 def parse_contents(contents, filename):
+    """
+    Matches text descriptions to centreline geometries and calculates a confidence level.
+    Outputs download links and a table so users can download and view the matched data
+
+    Parameters:
+    contents (string): the contents of the file
+
+    filename (string): the name of the file
+
+
+    Returns: 
+    Div: Div with download links (geojson, csv, shapefile) and a preview table
+    """
+
     app.logger.info("made it to the begginning of the parse_contents function")
 
 
@@ -239,8 +268,7 @@ def parse_contents(contents, filename):
     	csv_string = data.to_csv(index=False, header=get_headers(data), 
                              encoding='utf-8', line_terminator="~!?")
     except Exception as e:
-	app.logger.info("Error when converting df to csv string")
-	app.logger.error(str(e))
+	app.logger.error("Error when converting df to csv string: " + str(e))
 	return html.Div(children=[html.Div("Error processing data into csv string"), html.Br(), html.Div(data.to_str())])
 
     #json_string = data.to_json(orient='split')
@@ -254,15 +282,16 @@ def parse_contents(contents, filename):
    	csv_location =  "downloads/csv_file?value={}".format(csv_string)
 	#csv_location =  "downloads/csv_file"
 
+	app.logger.info("Length of CSV href: " + str(len(csv_location)))
 
     except Exception as e:
-	app.logger.info("Error with assigning the CSV URL: " + str(e))
+	app.logger.error("Error with assigning the CSV URL: " + str(e))
     	return html.Div("Error loading csv URL")
 
     try:	
 
     	geojson_str = '{"type":"FeatureCollection", "features":' + data2geojson(data) + '}'
-
+	#app.logger.info("geojson string: " + geojson_str)
 
     except Exception as e:
 	app.logger.error("Error with converting  the df to geojson string: ", str(e))
@@ -293,30 +322,22 @@ def parse_contents(contents, filename):
     except Exception as e:
 	app.logger.error("error with getting final CSV download link: " + str(e))
 
-    try:
-	geojson_download_link = html.A('Download Geojson  ', href=geojson_location, className='download_button')
-    except Exception as e:
-	app.logger.error("error with getting final GJSON download link: " + str(e))
+    #try:
+#	geojson_download_link = html.A('Download Geojson  ', href=geojson_location, className='download_button')
+ #   except Exception as e:
+#	app.logger.error("error with getting final GJSON download link: " + str(e))
 
-    try:
-	 shp_download_link = html.A('Download Shapefile', href=shp_location, className='download_button' )
-    except Exception as e:
-        app.logger.info("error with getting final SHP download link: " + str(e))
+ #   try:
+#	 shp_download_link = html.A('Download Shapefile', href=shp_location, className='download_button' )
+ #   except Exception as e:
+  #      app.logger.info("error with getting final SHP download link: " + str(e))
 
+    app.logger.info("Links created, about to return")
 
-    return html.Div(className="output", children=[
-
-	html.Div(className="split right", children=[
-	html.Br(),
-	html.H3("Download Your Data:"),
-        	html.Div(className='download_links',
-                	children=[csv_download_link,  geojson_download_link, shp_download_link]),
-      ]), 
-	html.Div(className="review-contents",  
-	children=[html.Div(className='tbl', children=[dash_table.DataTable(id='table',columns=[{"name": i, "id": i} for i in no_geom.columns],data=no_geom.to_dict("rows"), style_as_list_view=True,
+    return html.Div(className="review-contents",
+        children=[html.Div(className='tbl', children=[dash_table.DataTable(id='table',columns=[{"name": i, "id": i} for i in no_geom.columns],data=no_geom.to_dict("rows"), style_as_list_view=True,
         style_cell={'font-family':'Open Sans, sans-serif', 'height':75},
         style_header={'fontWeight':'bold'},)])])
-    ])
 
 
 # where I got inspiration from 
@@ -324,6 +345,7 @@ def parse_contents(contents, filename):
 @app.server.route("/downloads/csv_file")
 # this function will get run if "/download/newfile" is used 
 def download_csv():
+    app.logger.info("In download CSV function")
     try:
 
 	app.logger.info('Starting the download CSV process')
@@ -401,6 +423,7 @@ def get_columns_list(columnsList):
 
 # This method is used to create the columns names read from the geoJSON file
 def createColumns(columnsList, w):
+    app.logger.info("At beginning of create column list function for creating shp file")
     if 'To' in columnsList:
 	ordered_col_lst = ['ID', 'Street', 'To', 'From', 'Confidence', 'Geometry']
     else:
