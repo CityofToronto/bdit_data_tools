@@ -432,7 +432,7 @@ DECLARE
 				(
 				CASE WHEN btwn1 LIKE '% m %'
 				OR gis.abbr_street(regexp_REPLACE(split_part(split_part(frm, ' to ', 1), ' and ', 1), 'Between ', '', 'g')) LIKE '% m %'
-				THEN regexp_REPLACE(split_part(gis.abbr_street(regexp_REPLACE(split_part(split_part(frm, ' to ', 1), ' and ', 1), 'Between ', '', 'g')), ' m ' ,1), 'a point ', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(regexp_REPLACE(split_part(split_part(frm, ' to ', 1), ' and ', 1), 'Between ', '', 'g')), ' m ' ,1), 'a point ', '', 'g'), 'A point', '', 'g')::int
 				ELSE NULL
 				END
 				)
@@ -460,9 +460,9 @@ DECLARE
 				THEN 
 				(
 				CASE WHEN split_part(frm, ' and ', 2) <> ''
-				THEN regexp_REPLACE(split_part( gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' and ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part( gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' and ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::int
 				WHEN split_part(frm, ' to ', 2) <> ''
-				THEN regexp_REPLACE(split_part(gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' to ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' to ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::int
 				END
 				)
 				ELSE NULL
@@ -473,7 +473,7 @@ DECLARE
 				CASE WHEN btwn2_orig LIKE '% m %' 
 				OR gis.abbr_street(t) LIKE '% m %'
 				THEN 
-				regexp_REPLACE(split_part(gis.abbr_street(t), ' m ', 1), 'a point ', '', 'g')::int
+				regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(t), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::int
 				ELSE NULL
 				END 
 				)
