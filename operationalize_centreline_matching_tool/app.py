@@ -112,13 +112,13 @@ def text_to_centreline(highway, fr, to):
 	try:
         	df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', '{}')".format(highway, fr, to), con)
     	except Exception as e:
-		app.logger.info("error making database call: " + str(e))
+		app.logger.error("error making database call: " + str(e))
 		raise Exception("Error making DB call: " + str(e))
     else:
 	try:   
      		df = psql.read_sql("SELECT con AS confidence, centreline_segments AS geom FROM crosic.text_to_centreline('{}', '{}', {})".format(highway, fr, 'NULL'), con)
 	except Exception as e:
-		app.logger.info("error making database call: " + str(e))
+		app.logger.error("error making database call: " + str(e))
 		raise Exception("Error making DB call: " + str(e))
     return [highway, fr, to, df['confidence'].item(), df['geom'].item()]
 
@@ -132,7 +132,7 @@ def load_geoms(row_with_wkt, i):
     	else:
     		row_with_geom.append(None)
     except Exception as e:
-	app.logger.info("Error in load_geoms: " + str(e))
+	app.logger.error("Error in load_geoms: " + str(e))
 	raise Exception("Error in load_geoms: " + str(e))
     return row_with_geom
 
@@ -167,7 +167,7 @@ def get_rows(df):
         	# return row_with_geom 
             rows.append(row_with_geom)
 	except Exception as e:
-	    app.logger.info("Exception with calling text_to_centreline")
+	    app.logger.error("Exception with calling text_to_centreline")
 	    app.logger.info(str(e))
     return pd.DataFrame(data=rows)   #gpd.GeoDataFrame(data=rows)
 
@@ -208,7 +208,7 @@ def parse_contents(contents, filename):
             # Assume that the user uploaded an excel file
             df = pd.read_excel(io.BytesIO(decoded))
     except Exception as e:
-	app.logger.info("error with opening xlsx or csv file:" + str(e))
+	app.logger.error("error with opening xlsx or csv file:" + str(e))
         return html.Div(className="split right",children=str(e))
     
     if df.shape[1] not in [2,3]:
@@ -227,7 +227,7 @@ def parse_contents(contents, filename):
     	data.insert(loc=0,column=1000, value=pd.Series(data=[i for i in range(0, data.shape[0])]))
     
     except Exception as e:
-	app.logger.info("Exception raised when calling get_rows()" + str(e))
+	app.logger.error("Exception raised when calling get_rows()" + str(e))
     	return html.Div(e)
 
 
@@ -240,7 +240,7 @@ def parse_contents(contents, filename):
                              encoding='utf-8', line_terminator="~!?")
     except Exception as e:
 	app.logger.info("Error when converting df to csv string")
-	app.logger.info(str(e))
+	app.logger.error(str(e))
 	return html.Div(children=[html.Div("Error processing data into csv string"), html.Br(), html.Div(data.to_str())])
 
     #json_string = data.to_json(orient='split')
@@ -256,8 +256,7 @@ def parse_contents(contents, filename):
 
 
     except Exception as e:
-	app.logger.info("Error with assigning the CSV URL")
-	app.logger.info(str(e))
+	app.logger.info("Error with assigning the CSV URL: " + str(e))
     	return html.Div("Error loading csv URL")
 
     try:	
@@ -266,8 +265,7 @@ def parse_contents(contents, filename):
 
 
     except Exception as e:
-	app.logger.info("Error with converting  the df to geojson string")
-    	return html.Div(str(e))
+	app.logger.error("Error with converting  the df to geojson string: ", str(e))
 
     try:
     	geojson_location = "downloads/geojson?value={}".format(geojson_str)
@@ -282,8 +280,7 @@ def parse_contents(contents, filename):
     	no_geom = data.drop(['Geometry'], axis=1)
 
     except Exception as e:
-	app.logger.info("Error with assigning the GeoJSON or Shp URL")
-	app.logger.info(str(e))
+	app.logger.error("Error with assigning the GeoJSON or Shp URL: " + str(e))
     	return html.Div("Error with getting urls")
 	
     #session['geoj_str'] = geojson_str
@@ -294,45 +291,32 @@ def parse_contents(contents, filename):
     try:
     	csv_download_link = html.A('Download CSV      ', href=csv_location, className='download_button')
     except Exception as e:
-	app.logger.info("error with getting final CSV download link:")
-	app.logger.info(str(e))
+	app.logger.error("error with getting final CSV download link: " + str(e))
 
     try:
 	geojson_download_link = html.A('Download Geojson  ', href=geojson_location, className='download_button')
     except Exception as e:
-	app.logger.info("error with getting final GJSON download link:")
-	app.logger.info(str(e))
+	app.logger.error("error with getting final GJSON download link: " + str(e))
 
     try:
 	 shp_download_link = html.A('Download Shapefile', href=shp_location, className='download_button' )
     except Exception as e:
-        app.logger.info("error with getting final SHP download link:")
-        app.logger.info(str(e))
+        app.logger.info("error with getting final SHP download link: " + str(e))
 
 
     return html.Div(className="output", children=[
-	
+
 	html.Div(className="split right", children=[
-	html.H3("Preview Your Data:"),
-	html.Br(),
-	html.A("Preview           ", href="#table", className='download_button'),
-	html.Br(),
-	html.H3("Or"),
 	html.Br(),
 	html.H3("Download Your Data:"),
         	html.Div(className='download_links',
                 	children=[csv_download_link,  geojson_download_link, shp_download_link]),
-        html.Div(className="review-contents",
-        children=[html.Div(className='tbl', children=[dash_table.DataTable(
-        id='table',
-        columns=[{"name": i, "id": i} for i in no_geom.columns],
-        data=no_geom.to_dict("rows"),
-        style_as_list_view=True,
+      ]), 
+	html.Div(className="review-contents",  
+	children=[html.Div(className='tbl', children=[dash_table.DataTable(id='table',columns=[{"name": i, "id": i} for i in no_geom.columns],data=no_geom.to_dict("rows"), style_as_list_view=True,
         style_cell={'font-family':'Open Sans, sans-serif', 'height':75},
-        style_header={'fontWeight':'bold'},
-
-        )])])
-	])])
+        style_header={'fontWeight':'bold'},)])])
+    ])
 
 
 # where I got inspiration from 
@@ -362,8 +346,7 @@ def download_csv():
 	app.logger.info('about to send CSV file')
 
     except Exception as e:
-	app.logger.info("Error with downloading CSV")
-	app.logger.info(str(e))
+	app.logger.error("Error with downloading CSV: " + str(e))
         return html.Div(str(e))
 
 
@@ -532,9 +515,8 @@ def update_output_div(filename_list, contents_list):
 	   try:
            	new_file = [parse_contents(c, f) for c, f in zip(contents_list, filename_list)]
 	   except Exception as e:
-		app.logger.info("Error with calling parse_contents()")
-		app.logger.info(str(e))
+		app.logger.error("Error with calling parse_contents: " + str(e))
            return new_file 
         else:
-             return 'Insuffient file format, please enter a CSV or Excel file'
+             return Div('Insuffient file format, please enter a CSV or Excel file')
            
