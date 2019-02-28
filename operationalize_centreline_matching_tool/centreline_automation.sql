@@ -39,7 +39,7 @@ END;
 $$ LANGUAGE plpgsql; 
 
 
-CREATE OR REPLACE FUNCTION crosic.get_intersection_geom(highway2 TEXT, btwn TEXT, direction TEXT, metres INT)
+CREATE OR REPLACE FUNCTION crosic.get_intersection_geom(highway2 TEXT, btwn TEXT, direction TEXT, metres FLOAT)
 RETURNS GEOMETRY AS $geom$
 DECLARE 
 geom geometry;
@@ -97,9 +97,8 @@ $geom$ LANGUAGE plpgsql;
 
 
 
-DROP FUNCTION crosic.match_line_to_centreline(line_geom geometry, highway2 text, metres_btwn1 INT, metres_btwn2 INT);
 
-CREATE OR REPLACE FUNCTION crosic.match_line_to_centreline(line_geom geometry, highway2 text, metres_btwn1 INT, metres_btwn2 INT)
+CREATE OR REPLACE FUNCTION crosic.match_line_to_centreline(line_geom geometry, highway2 text, metres_btwn1 FLOAT, metres_btwn2 FLOAT)
 RETURNS geometry AS $geom$
 DECLARE geom geometry := (
 	SELECT ST_Transform(ST_LineMerge(ST_UNION(s.geom)), 26917)
@@ -133,7 +132,7 @@ $geom$ LANGUAGE plpgSQL;
 
 
 
-CREATE OR REPLACE FUNCTION crosic.centreline_case1(direction_btwn2 text, metres_btwn2 int, centreline_geom geometry, line_geom geometry, oid1_geom geometry, oid2_geom geometry)
+CREATE OR REPLACE FUNCTION crosic.centreline_case1(direction_btwn2 text, metres_btwn2 FLOAT, centreline_geom geometry, line_geom geometry, oid1_geom geometry, oid2_geom geometry)
 RETURNS geometry AS $geom$
 
 -- i.e. St Mark's Ave and a point 100 m north 
@@ -208,7 +207,7 @@ END;
 $geom$ LANGUAGE plpgSQL; 
 
 
-CREATE OR REPLACE FUNCTION crosic.centreline_case2(direction_btwn1 text, direction_btwn2 text, metres_btwn1 int, metres_btwn2 int, centreline_geom geometry, line_geom geometry, oid1_geom geometry, oid2_geom geometry)
+CREATE OR REPLACE FUNCTION crosic.centreline_case2(direction_btwn1 text, direction_btwn2 text, metres_btwn1 FLOAT, metres_btwn2 FLOAT, centreline_geom geometry, line_geom geometry, oid1_geom geometry, oid2_geom geometry)
 RETURNS geometry AS $geom$
 
 
@@ -428,11 +427,11 @@ DECLARE
 				END;
 
 					
-	metres_btwn1 INT :=	CASE WHEN t IS NULL THEN 
+	metres_btwn1 FLOAT :=	(CASE WHEN t IS NULL THEN 
 				(
 				CASE WHEN btwn1 LIKE '% m %'
 				OR gis.abbr_street(regexp_REPLACE(split_part(split_part(frm, ' to ', 1), ' and ', 1), 'Between ', '', 'g')) LIKE '% m %'
-				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(regexp_REPLACE(split_part(split_part(frm, ' to ', 1), ' and ', 1), 'Between ', '', 'g')), ' m ' ,1), 'a point ', '', 'g'), 'A point', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(regexp_REPLACE(split_part(split_part(frm, ' to ', 1), ' and ', 1), 'Between ', '', 'g')), ' m ' ,1), 'a point ', '', 'g'), 'A point', '', 'g')::FLOAT
 				ELSE NULL
 				END
 				)
@@ -440,14 +439,14 @@ DECLARE
 				(
 				CASE WHEN btwn1 LIKE '% m %'
 				OR gis.abbr_street(frm) LIKE '% m %'
-				THEN regexp_REPLACE(split_part(gis.abbr_street(frm), ' m ' ,1), 'a point ', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(frm), ' m ' ,1), 'a point ', '', 'g'), 'A point', '', 'g')::FLOAT
 				ELSE NULL
 				END
 				)
-				END;
+				END)::FLOAT;
 
 				
-	metres_btwn2 INT :=	CASE WHEN t IS NULL THEN 
+	metres_btwn2 FLOAT :=	(CASE WHEN t IS NULL THEN 
 				( CASE WHEN btwn2_orig LIKE '% m %' OR 
 				(
 					CASE WHEN split_part(frm, ' and ', 2) <> ''
@@ -460,9 +459,9 @@ DECLARE
 				THEN 
 				(
 				CASE WHEN split_part(frm, ' and ', 2) <> ''
-				THEN regexp_REPLACE(regexp_REPLACE(split_part( gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' and ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part( gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' and ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::FLOAT
 				WHEN split_part(frm, ' to ', 2) <> ''
-				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' to ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::int
+				THEN regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(frm, ' to ', 2), '\(.*\)', '', 'g'), 'Between ', '', 'g')), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::FLOAT
 				END
 				)
 				ELSE NULL
@@ -473,11 +472,11 @@ DECLARE
 				CASE WHEN btwn2_orig LIKE '% m %' 
 				OR gis.abbr_street(t) LIKE '% m %'
 				THEN 
-				regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(t), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::int
+				regexp_REPLACE(regexp_REPLACE(split_part(gis.abbr_street(t), ' m ', 1), 'a point ', '', 'g'), 'A point', '', 'g')::FLOAT
 				ELSE NULL
 				END 
 				)
-				END;
+				END)::FLOAT;
 
 
 	-- for case one 
