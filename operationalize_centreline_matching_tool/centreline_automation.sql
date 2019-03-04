@@ -1,19 +1,21 @@
-﻿CREATE OR REPLACE FUNCTION crosic.get_intersection_id(highway2 TEXT, btwn TEXT)
+﻿CREATE OR REPLACE FUNCTION crosic.get_intersection_id(highway2 TEXT, btwn TEXT, not_int_id INT)
 RETURNS INT[] AS $$
 DECLARE 
 oid INT;
 lev_sum INT;
+int_id_found INT;
 
 BEGIN 
-SELECT intersections.objectid, SUM(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1), levenshtein(TRIM(intersections.street), TRIM(btwn), 1, 1, 1))) 
-INTO oid, lev_sum
+SELECT intersections.objectid, SUM(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1), levenshtein(TRIM(intersections.street), TRIM(btwn), 1, 1, 1))), intersections.int_id
+INTO oid, lev_sum, int_id_found
 FROM 
-gis.centreline_intersection_streets AS intersections
+(gis.centreline_intersection_streets LEFT JOIN gis.centreline_intersection USING(objectid)) AS intersections 
  
 
-WHERE (levenshtein(TRIM(intersections.street),   TRIM(highway2), 1, 1, 1) < 4 OR levenshtein(TRIM(intersections.street), TRIM(btwn), 1, 1, 1) < 4) 
+WHERE (levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1) < 4 OR levenshtein(TRIM(intersections.street), TRIM(btwn), 1, 1, 1) < 4) AND intersections.int_id  <> not_int_id
 
-GROUP BY intersections.objectid
+
+GROUP BY intersections.objectid, intersections.int_id
 HAVING COUNT(DISTINCT TRIM(intersections.street)) > 1 
 ORDER BY AVG(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1), levenshtein(TRIM(intersections.street),  TRIM(btwn), 1, 1, 1)))
 
@@ -21,47 +23,56 @@ LIMIT 1;
 
 raise notice 'highway2 being matched: % btwn being matched: % intersection arr: %', highway2, btwn, ARRAY[oid, lev_sum];
 
-RETURN ARRAY[oid, lev_sum]; 
+RETURN ARRAY[oid, lev_sum, int_id_found]; 
 
 END; 
 $$ LANGUAGE plpgsql; 
 
 
+DROP TYPE geom_int CASCADE;
+CREATE TYPE geom_int AS (
+geom geometry, 
+int_id INT
+)
 
-CREATE OR REPLACE FUNCTION crosic.get_intersection_geom(highway2 TEXT, btwn TEXT, direction TEXT, metres FLOAT)
-RETURNS GEOMETRY AS $geom$
+
+CREATE OR REPLACE FUNCTION crosic.get_intersection_geom(highway2 TEXT, btwn TEXT, direction TEXT, metres FLOAT, not_int_id INT)
+RETURNS TEXT[] AS $arr$
 DECLARE 
-geom geometry;
-oid INT := (crosic.get_intersection_id(highway2, btwn))[1];
+geom TEXT;
+oid INT := (crosic.get_intersection_id(highway2, btwn, not_int_id))[1];
+int_id_found INT := (crosic.get_intersection_id(highway2, btwn, not_int_id))[3];
 oid_geom geometry := (
 		SELECT ST_Transform(gis.geom, 26917)
 		FROM gis.centreline_intersection gis
 		WHERE objectid = oid
 		);
-BEGIN 
-SELECT (
+arr1 TEXT[] :=  ARRAY(SELECT (
 	-- normal case
 	CASE WHEN direction IS NULL OR metres IS NULL 
-	THEN oid_geom
+	THEN ST_AsText(oid_geom)
 	-- special case
 	ELSE (
-	(CASE WHEN TRIM(direction) = 'west' THEN ST_Translate(ST_Transform(oid_geom, 26917), -metres, 0) 
-	WHEN TRIM(direction) = 'east' THEN ST_Translate(ST_Transform(oid_geom, 26917), metres, 0) 
-	WHEN TRIM(direction) = 'north' THEN ST_Translate(ST_Transform(oid_geom, 26917), 0, metres) 
-	WHEN TRIM(direction) = 'south' THEN ST_Translate(ST_Transform(oid_geom, 26917), 0, -metres) 
+	(CASE WHEN TRIM(direction) = 'west' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), -metres, 0))
+	WHEN TRIM(direction) = 'east' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), metres, 0))
+	WHEN TRIM(direction) = 'north' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), 0, metres))
+	WHEN TRIM(direction) = 'south' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), 0, -metres))
 	END)
 	)
 	END 
-) 
-INTO geom;
+));
 
-raise notice 'geom: % direction % metres %', ST_AsText(geom), direction, metres::TEXT;
+arr TEXT[];
 
-RETURN geom; 
+BEGIN 
+arr := ARRAY_APPEND(arr1, int_id_found::TEXT);
+raise notice 'geom: % direction % metres %', geom, direction, metres::TEXT;
+
+RETURN arr; 
 
 
 END; 
-$geom$ LANGUAGE plpgsql; 
+$arr$ LANGUAGE plpgsql; 
 
 
 
@@ -492,9 +503,30 @@ DECLARE
 
 
 	-- get intersection geoms
-	oid1_geom geometry := crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT);
 
-	oid2_geom geometry := crosic.get_intersection_geom(highway2, btwn2, direction_btwn2::TEXT, metres_btwn2::FLOAT);
+	--CREATE TEMP TABLE geom_int1(geometry, int) AS (
+	
+	--SELECT geom, int_id INTO geom_int1 FROM crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0)
+	-- );
+
+
+	--int_id1 INT := (SELECT int_id FROM geom_int1);
+
+	--oid1_geom := (SELECT geom FROM geom_int1);
+	
+	
+	--int_id1 INT := (SELECT int_id FROM crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0));
+
+	--oid1_geom GEOMETRY := (SELECT geom FROM crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0));
+
+
+	text_arr_oid1 TEXT[]:= crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0);
+
+	int_id1 INT := (text_arr_oid1[2])::INT;
+	oid1_geom GEOMETRY := ST_GeomFromText(text_arr_oid1[1], 26917);
+
+	oid2_geom GEOMETRY := ST_GeomFromText((crosic.get_intersection_geom(highway2, btwn2, direction_btwn2::TEXT, metres_btwn2::FLOAT, int_id1))[1], 26917);
+
 
 	-- create a line between the two intersection geoms
 	line_geom geometry = crosic.get_line_geom(oid1_geom, oid2_geom);
