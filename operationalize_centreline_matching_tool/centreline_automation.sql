@@ -5,38 +5,27 @@ oid INT;
 lev_sum INT;
 
 BEGIN 
-SELECT intersections.objectid, (levenshtein(TRIM(intersections.intersec51), btwn, 1, 1, 2) + levenshtein(TRIM(intersections.intersec52), highway2, 1, 1, 2))
+SELECT intersections.objectid, SUM(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1), levenshtein(TRIM(intersections.street), TRIM(btwn), 1, 1, 1))) 
 INTO oid, lev_sum
 FROM 
-(
-	SELECT objectid,
-		(
-		CASE WHEN intersec5 LIKE '%/%'
-		THEN TRIM(split_part(intersec5, '/', 1))
-		ELSE intersec5
-		END
-		) AS intersec51, 
-		(
-		CASE WHEN intersec5 LIKE '%/%'
-		THEN TRIM(split_part(intersec5, '/', 2))
-		ELSE intersec5
-		END
-		) AS intersec52
-	FROM gis.centreline_intersection
-)
--- gis.centreline_intersection_streets 
-AS intersections
+gis.centreline_intersection_streets AS intersections
+ 
 
-WHERE levenshtein(TRIM(intersections.intersec51), btwn, 1, 1, 2) < 4  AND levenshtein(TRIM(intersections.intersec52), highway2, 1, 1, 2) < 4
+WHERE (levenshtein(TRIM(intersections.street),   TRIM(highway2), 1, 1, 1) < 4 OR levenshtein(TRIM(intersections.street), TRIM(btwn), 1, 1, 1) < 4) 
 
--- select the intersection with the lowest combined levenshtien distance from the input streets
-ORDER BY (levenshtein(intersections.intersec51, btwn, 1, 1, 2) +  levenshtein(intersections.intersec52, highway2, 1, 1, 2))
+GROUP BY intersections.objectid
+HAVING COUNT(DISTINCT TRIM(intersections.street)) > 1 
+ORDER BY AVG(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1), levenshtein(TRIM(intersections.street),  TRIM(btwn), 1, 1, 1)))
+
 LIMIT 1;
+
+raise notice 'highway2 being matched: % btwn being matched: % intersection arr: %', highway2, btwn, ARRAY[oid, lev_sum];
 
 RETURN ARRAY[oid, lev_sum]; 
 
 END; 
 $$ LANGUAGE plpgsql; 
+
 
 
 CREATE OR REPLACE FUNCTION crosic.get_intersection_geom(highway2 TEXT, btwn TEXT, direction TEXT, metres FLOAT)
@@ -56,17 +45,20 @@ SELECT (
 	THEN oid_geom
 	-- special case
 	ELSE (
-	(CASE WHEN direction = 'west' THEN ST_Translate(ST_Transform(oid_geom, 26917), -metres, 0) 
-	WHEN direction = 'east' THEN ST_Translate(ST_Transform(oid_geom, 26917), metres, 0) 
-	WHEN direction = 'north' THEN ST_Translate(ST_Transform(oid_geom, 26917), 0, metres) 
-	WHEN direction = 'south' THEN ST_Translate(ST_Transform(oid_geom, 26917), 0, -metres) 
+	(CASE WHEN TRIM(direction) = 'west' THEN ST_Translate(ST_Transform(oid_geom, 26917), -metres, 0) 
+	WHEN TRIM(direction) = 'east' THEN ST_Translate(ST_Transform(oid_geom, 26917), metres, 0) 
+	WHEN TRIM(direction) = 'north' THEN ST_Translate(ST_Transform(oid_geom, 26917), 0, metres) 
+	WHEN TRIM(direction) = 'south' THEN ST_Translate(ST_Transform(oid_geom, 26917), 0, -metres) 
 	END)
 	)
 	END 
 ) 
 INTO geom;
 
+raise notice 'geom: % direction % metres %', ST_AsText(geom), direction, metres::TEXT;
+
 RETURN geom; 
+
 
 END; 
 $geom$ LANGUAGE plpgsql; 
@@ -82,14 +74,18 @@ DECLARE
 len INT := ST_LENGTH(ST_MakeLine(oid1_geom, oid2_geom)); 
 geom GEOMETRY := 
 	(
-	-- WARNING INTEAD FOR LEN > 3000 ?????????
-	CASE WHEN len > 11 AND len < 3000
+	-- WARNING FOR LEN > 3000 ?????????
+	CASE WHEN len > 11 AND len < 10000
 	THEN ST_Transform(ST_MakeLine(oid1_geom, oid2_geom), 26917)
 	END
 	);
 BEGIN
 
+raise notice 'LINE geom: %', geom;
+raise notice 'len: %', len; 
+
 RETURN geom;
+
 
 END;
 $geom$ LANGUAGE plpgsql; 
@@ -207,6 +203,7 @@ END;
 $geom$ LANGUAGE plpgSQL; 
 
 
+
 CREATE OR REPLACE FUNCTION crosic.centreline_case2(direction_btwn1 text, direction_btwn2 text, metres_btwn1 FLOAT, metres_btwn2 FLOAT, centreline_geom geometry, line_geom geometry, oid1_geom geometry, oid2_geom geometry)
 RETURNS geometry AS $geom$
 
@@ -258,7 +255,7 @@ geom geometry := (
 		THEN (
 		-- when the intersection is after the rough line
 		CASE WHEN ST_LineLocatePoint(centreline_geom, oid2_geom)
-		> ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0.99999, 1)))
+		> ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0, 0.000001))) -- ST_LineSubstring(line_geom, 0.99999, 1)))
 		-- take the line from intersection 2 to x metres before intersection 1
 			THEN 
 			line_substring_lower_value_first(centreline_geom, 
@@ -267,7 +264,7 @@ geom geometry := (
 
 
 		WHEN ST_LineLocatePoint(centreline_geom, oid2_geom)
-		< ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0.99999, 1)))
+		< ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0, 0.000001))) -- ST_LineSubstring(line_geom, 0.99999, 1)))
 			THEN 
 			line_substring_lower_value_first(centreline_geom, 
 			ST_LineLocatePoint(centreline_geom, oid1_geom)+ (metres_btwn1/ST_Length(centreline_geom)), 
@@ -339,6 +336,10 @@ geom geometry := (
 
 BEGIN 
 
+raise notice 'IN THE CASE TWO FUNCTION !!!!!';
+raise notice 'CASE 2 PARAMETERS  direction_btwn1 %, direction_btwn2 %, metres_btwn1 %, metres_btwn2 %, centreline_geom %, line_geom %, oid1_geom %, oid2_geom % output geom: %',direction_btwn1, direction_btwn2, metres_btwn1, metres_btwn2, ST_AsText(centreline_geom), ST_AsText(line_geom), oid1_geom, oid2_geom, geom;
+raise notice 'centreline line location of oid2_geom: %  centreline line location of end of line_geom %', ST_LineLocatePoint(centreline_geom, oid2_geom)::TEXT, ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0.99999, 1)))::TEXT;
+
 RETURN geom;
 
 END;
@@ -359,15 +360,15 @@ DECLARE
 	-- when the input was btwn instead of from and to 
 	
 	btwn1 TEXT := CASE WHEN t IS NULL THEN 
-	gis.abbr_street( regexp_REPLACE(regexp_REPLACE(split_part(split_part(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), ' to ', 1), ' and ', 1), '\(.*\)', '', 'g'), 'Between ', '', 'g'))
-	ELSE gis.abbr_street(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g')) 
+	gis.abbr_street(regexp_REPLACE(regexp_REPLACE(regexp_REPLACE(split_part(split_part(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), ' to ', 1), ' and ', 1), '\(.*\)', '', 'g'), 'Between ', '', 'g'), 'A point', '', 'g'))
+	ELSE gis.abbr_street(regexp_REPLACE(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), 'A point', '', 'g')) 
 	END; 
 
 	btwn2_orig TEXT := CASE WHEN t IS NULL THEN 
 			(CASE WHEN split_part(frm, ' and ', 2) <> ''
-			THEN gis.abbr_street( regexp_REPLACE(split_part(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), ' and ', 2), 'Between ', '', 'g'))
+			THEN gis.abbr_street(regexp_REPLACE(regexp_REPLACE(split_part(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), ' and ', 2), 'Between ', '', 'g'), 'A point', '', 'g'))
 			WHEN split_part(frm, ' to ', 2) <> ''
-			THEN gis.abbr_street( regexp_REPLACE(split_part(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), ' to ', 2), 'Between ', '', 'g'))
+			THEN gis.abbr_street(regexp_REPLACE(regexp_REPLACE(split_part(regexp_REPLACE(frm, '[0123456789.]* metres (north|south|east|west|East) of ', '', 'g'), ' to ', 2), 'Between ', '', 'g'), 'A point', '', 'g'))
 			END)
 			
 			ELSE 
@@ -489,10 +490,11 @@ DECLARE
 	END
 	);
 
-	-- get intersection geoms
-	oid1_geom geometry := crosic.get_intersection_geom(highway2, btwn1, direction_btwn1, metres_btwn1);
 
-	oid2_geom geometry := crosic.get_intersection_geom(highway2, btwn2, direction_btwn2, metres_btwn2);
+	-- get intersection geoms
+	oid1_geom geometry := crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT);
+
+	oid2_geom geometry := crosic.get_intersection_geom(highway2, btwn2, direction_btwn2::TEXT, metres_btwn2::FLOAT);
 
 	-- create a line between the two intersection geoms
 	line_geom geometry = crosic.get_line_geom(oid1_geom, oid2_geom);
@@ -517,7 +519,7 @@ DECLARE
 				ELSE 
 				(
 				SELECT * 
-				FROM crosic.centreline_case2(direction_btwn1, direction_btwn2, metres_btwn2, metres_btwn2, crosic.match_line_to_centreline(line_geom, highway2, metres_btwn1, metres_btwn2), line_geom, 
+				FROM crosic.centreline_case2(direction_btwn1, direction_btwn2, metres_btwn1, metres_btwn2, crosic.match_line_to_centreline(line_geom, highway2, metres_btwn1, metres_btwn2), line_geom, 
 				-- get the original intersection geoms (not the translated ones) 
 				crosic.get_intersection_geom(highway2, btwn1, NULL, NULL), crosic.get_intersection_geom(highway2, btwn2, NULL, NULL))
 				)
@@ -535,15 +537,19 @@ DECLARE
 		WHEN lev_sum = 0 
 		THEN 'Very High (100% match)'
 		WHEN lev_sum = 1
-		THEN 'High'
+		THEN 'High (1 character difference)'
 		WHEN lev_sum IN (2,3)
-		THEN 'Medium'
-		ELSE 'Low'
+		THEN 'Medium (2 or 3 character difference)'
+		ELSE 'Low (more than 3 character difference)'
 		END
 	);
 	
 
 BEGIN 
+
+
+	raise notice 'btwn1: % btwn2: % highway2: % metres_btwn1: %  metres_btwn2: % direction_btwn1: % direction_btwn2: % cntreline_segments: %', btwn1, btwn2, highway2, metres_btwn1, metres_btwn2, direction_btwn1, direction_btwn2, ST_ASText(centreline_segments);
+	
 
 RETURN QUERY (SELECT ST_AsText(centreline_segments), con);
 
