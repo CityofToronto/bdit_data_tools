@@ -21,7 +21,7 @@ ORDER BY AVG(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1,
 
 LIMIT 1;
 
-raise notice 'highway2 being matched: % btwn being matched: % intersection arr: %', highway2, btwn, ARRAY[oid, lev_sum];
+raise notice 'highway2 being matched: % btwn being matched: % not_int_id: % intersection arr: %', highway2, btwn, not_int_id, ARRAY[oid, lev_sum];
 
 RETURN ARRAY[oid, lev_sum, int_id_found]; 
 
@@ -29,21 +29,57 @@ END;
 $$ LANGUAGE plpgsql; 
 
 
-DROP TYPE geom_int CASCADE;
-CREATE TYPE geom_int AS (
-geom geometry, 
-int_id INT
-)
+
+CREATE OR REPLACE FUNCTION crosic.get_intersection_id_highway_equals_btwn(highway2 TEXT, btwn TEXT, not_int_id INT)
+RETURNS INT[] AS $$
+DECLARE 
+oid INT;
+lev_sum INT;
+int_id_found INT;
+
+BEGIN 
+SELECT intersections.objectid, SUM(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1))), intersections.int_id
+INTO oid, lev_sum, int_id_found
+FROM 
+(gis.centreline_intersection_streets LEFT JOIN gis.centreline_intersection USING(objectid, classifi6, elevatio10)) AS intersections 
+ 
+
+WHERE levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1) < 4 AND intersections.int_id  <> not_int_id AND intersections.classifi6 IN ('SEUML','SEUSL', 'CDSSL', 'LSRSL')
+
+
+GROUP BY intersections.objectid, intersections.int_id, elevatio10
+-- HAVING COUNT(DISTINCT TRIM(intersections.street)) >= 1 
+ORDER BY AVG(LEAST(levenshtein(TRIM(intersections.street), TRIM(highway2), 1, 1, 1), levenshtein(TRIM(intersections.street),  TRIM(btwn), 1, 1, 1))), 
+(CASE WHEN elevatio10='Cul de sac' THEN 1 WHEN elevatio10='Pseudo' THEN 2 WHEN elevatio10='Laneway' THEN 3 ELSE 4 END),
+-- (CASE WHEN classifi6='CDSSL' THEN 1 WHEN classifi6='LSRSL' THEN 2 WHEN classifi6='SEUSL' THEN 3 WHEN classifi6='SEUML' THEN 4 END), 
+(SELECT COUNT(*) FROM gis.centreline_intersection_streets WHERE objectid = intersections.objectid) 
+
+LIMIT 1;
+
+raise notice 'highway2 being matched: % btwn being matched: % not_int_id: % intersection arr: %', highway2, btwn, not_int_id, ARRAY[oid, lev_sum];
+
+RETURN ARRAY[oid, lev_sum, int_id_found]; 
+
+END; 
+$$ LANGUAGE plpgsql; 
+
+
+
 
 
 CREATE OR REPLACE FUNCTION crosic.get_intersection_geom(highway2 TEXT, btwn TEXT, direction TEXT, metres FLOAT, not_int_id INT)
 RETURNS TEXT[] AS $arr$
 DECLARE 
 geom TEXT;
-oid INT := (crosic.get_intersection_id(highway2, btwn, not_int_id))[1];
-int_id_found INT := (crosic.get_intersection_id(highway2, btwn, not_int_id))[3];
+int_arr INT[] := (CASE WHEN TRIM(highway2) = TRIM(btwn) THEN (crosic.get_intersection_id_highway_equals_btwn(highway2, btwn, not_int_id))
+	ELSE (crosic.get_intersection_id(highway2, btwn, not_int_id))
+	END);
+
+oid INT := int_arr[1];
+int_id_found INT := int_arr[3];
+lev_sum INT := int_arr[2];
 oid_geom geometry := (
-		SELECT ST_Transform(gis.geom, 26917)
+		SELECT ST_Transform(ST_SetSRID(gis.geom, 4326), 26917)
 		FROM gis.centreline_intersection gis
 		WHERE objectid = oid
 		);
@@ -53,20 +89,21 @@ arr1 TEXT[] :=  ARRAY(SELECT (
 	THEN ST_AsText(oid_geom)
 	-- special case
 	ELSE (
-	(CASE WHEN TRIM(direction) = 'west' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), -metres, 0))
-	WHEN TRIM(direction) = 'east' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), metres, 0))
-	WHEN TRIM(direction) = 'north' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), 0, metres))
-	WHEN TRIM(direction) = 'south' THEN ST_AsText(ST_Translate(ST_Transform(oid_geom, 26917), 0, -metres))
+	(CASE WHEN TRIM(direction) = 'west' THEN ST_AsText(ST_Translate(oid_geom, -metres, 0))
+	WHEN TRIM(direction) = 'east' THEN ST_AsText(ST_Translate(oid_geom, metres, 0))
+	WHEN TRIM(direction) = 'north' THEN ST_AsText(ST_Translate(oid_geom, 0, metres))
+	WHEN TRIM(direction) = 'south' THEN ST_AsText(ST_Translate(oid_geom, 0, -metres))
 	END)
 	)
 	END 
 ));
 
-arr TEXT[];
 
+arr2 TEXT[] := ARRAY_APPEND(arr1, int_id_found::TEXT);
+arr TEXT[] := ARRAY_APPEND(arr2, lev_sum::TEXT);
 BEGIN 
-arr := ARRAY_APPEND(arr1, int_id_found::TEXT);
-raise notice 'geom: % direction % metres %', geom, direction, metres::TEXT;
+
+raise notice 'get_intersection_geom stuff: oid: % geom: % direction % metres % not_int_id: %', oid, ST_AsText(geom), direction, metres::TEXT, not_int_id;
 
 RETURN arr; 
 
@@ -92,8 +129,7 @@ geom GEOMETRY :=
 	);
 BEGIN
 
-raise notice 'LINE geom: %', geom;
-raise notice 'len: %', len; 
+raise notice 'LINE geom: % length of line: %', ST_AsText(ST_Transform(geom, 4326)), len;
 
 RETURN geom;
 
@@ -139,7 +175,7 @@ $geom$ LANGUAGE plpgSQL;
 
 
 
-CREATE OR REPLACE FUNCTION crosic.centreline_case1(direction_btwn2 text, metres_btwn2 FLOAT, centreline_geom geometry, line_geom geometry, oid1_geom geometry, oid2_geom geometry)
+CREATE OR REPLACE FUNCTION crosic.centreline_case1(direction_btwn2 text, metres_btwn2 FLOAT, centreline_geom geometry, line_geom geometry, oid1_geom geometry)
 RETURNS geometry AS $geom$
 
 -- i.e. St Mark's Ave and a point 100 m north 
@@ -167,10 +203,13 @@ THEN ST_LineSubstring(centreline_geom, ST_LineLocatePoint(centreline_geom, oid1_
 ST_LineLocatePoint(centreline_geom, oid1_geom) + (metres_btwn2/ST_Length(centreline_geom))  )
 
 
+
 END
 );
 
 BEGIN 
+
+raise notice 'IN CASE 1 FUNCTION !!!!!!!!!!!!!!!!!!!  direction_btwn2: %, metres_btwn2: %  centreline_geom: %  line_geom: %  oid1_geom: % llp1: %  llp2: % len centreline geom: %', direction_btwn2, metres_btwn2, ST_ASText(ST_Transform(centreline_geom, 4326)), ST_AsText(ST_Transform(line_geom, 4326)), ST_AsText(ST_Transform(oid1_geom, 4326)), ST_LineLocatePoint(centreline_geom, oid1_geom),  ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0.99999, 1))), ST_Length(centreline_geom);
 
 RETURN geom;
 
@@ -348,7 +387,7 @@ geom geometry := (
 BEGIN 
 
 raise notice 'IN THE CASE TWO FUNCTION !!!!!';
-raise notice 'CASE 2 PARAMETERS  direction_btwn1 %, direction_btwn2 %, metres_btwn1 %, metres_btwn2 %, centreline_geom %, line_geom %, oid1_geom %, oid2_geom % output geom: %',direction_btwn1, direction_btwn2, metres_btwn1, metres_btwn2, ST_AsText(centreline_geom), ST_AsText(line_geom), oid1_geom, oid2_geom, geom;
+raise notice 'CASE 2 PARAMETERS  direction_btwn1 %, direction_btwn2 %, metres_btwn1 %, metres_btwn2 %, centreline_geom %, line_geom %, oid1_geom %, oid2_geom % output geom: %',direction_btwn1, direction_btwn2, metres_btwn1, metres_btwn2, ST_AsText(ST_Transform(centreline_geom, 4326)), ST_AsText(ST_Transform(line_geom, 4326)), ST_AsText(ST_Transform(oid1_geom, 4326)), ST_AsText(ST_Transform(oid2_geom, 4326)), ST_AsText(ST_Transform(geom, 4326));
 raise notice 'centreline line location of oid2_geom: %  centreline line location of end of line_geom %', ST_LineLocatePoint(centreline_geom, oid2_geom)::TEXT, ST_LineLocatePoint(centreline_geom, ST_ClosestPoint(centreline_geom, ST_LineSubstring(line_geom, 0.99999, 1)))::TEXT;
 
 RETURN geom;
@@ -491,41 +530,55 @@ DECLARE
 				END)::FLOAT;
 
 
+
+	-- to help figure out if the row is case 1 
+	-- i.e. Watson road from St. Mark's Road to a point 100 metres north
+	-- we want the btwn2 to be St. Mark's Road (which is also btwn1)
+	-- there are also cases like: street= Arundel Avenue  and  btwn=  Danforth Avenue and a point 44.9 metres north of Fulton Avenue
+	-- we need to be able to differentiate the two cases
+	-- the difference between the two is that one of the cases has a 'of' to describe the second road that intersects with "street"/"highway2"
+	btwn2_check TEXT := CASE WHEN t IS NULL THEN 
+			(CASE WHEN split_part(frm, ' and ', 2) <> ''
+			THEN gis.abbr_street(regexp_REPLACE(regexp_REPLACE(split_part(frm, ' and ', 2), 'Between ', '', 'g'), 'A point', '', 'g'))
+			WHEN split_part(frm, ' to ', 2) <> ''
+			THEN gis.abbr_street(regexp_REPLACE(regexp_REPLACE(split_part(frm, ' to ', 2), 'Between ', '', 'g'), 'A point', '', 'g'))
+			END)
+			
+			ELSE 
+			gis.abbr_street(t)
+			END ; 
+
+
+
 	-- for case one 
 	-- i.e. Watson road from St. Mark's Road to a point 100 metres north
 	-- we want the btwn2 to be St. Mark's Road (which is also btwn1)
 	btwn2 TEXT := (
-	CASE WHEN btwn2_orig LIKE '%point%'
+	CASE WHEN btwn2_orig LIKE '%point%' AND (btwn2_check NOT LIKE '% of %' OR btwn2_check LIKE ('% of ' || TRIM(btwn1)))
 	THEN btwn1
-	ELSE btwn2_orig 
+	ELSE regexp_replace(btwn2_orig , 'a point', '', 'g')
 	END
 	);
 
 
+
+
+
+
 	-- get intersection geoms
-
-	--CREATE TEMP TABLE geom_int1(geometry, int) AS (
-	
-	--SELECT geom, int_id INTO geom_int1 FROM crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0)
-	-- );
-
-
-	--int_id1 INT := (SELECT int_id FROM geom_int1);
-
-	--oid1_geom := (SELECT geom FROM geom_int1);
-	
-	
-	--int_id1 INT := (SELECT int_id FROM crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0));
-
-	--oid1_geom GEOMETRY := (SELECT geom FROM crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0));
-
 
 	text_arr_oid1 TEXT[]:= crosic.get_intersection_geom(highway2, btwn1, direction_btwn1::TEXT, metres_btwn1::FLOAT, 0);
 
 	int_id1 INT := (text_arr_oid1[2])::INT;
+	
 	oid1_geom GEOMETRY := ST_GeomFromText(text_arr_oid1[1], 26917);
 
-	oid2_geom GEOMETRY := ST_GeomFromText((crosic.get_intersection_geom(highway2, btwn2, direction_btwn2::TEXT, metres_btwn2::FLOAT, int_id1))[1], 26917);
+	text_arr_oid2 TEXT[] := (CASE WHEN btwn2_orig LIKE '%point%' AND (btwn2_check NOT LIKE '% of %' OR btwn2_check LIKE ('% of ' || TRIM(btwn1)))
+				THEN crosic.get_intersection_geom(highway2, btwn2, direction_btwn2::TEXT, metres_btwn2::FLOAT, 0)
+				ELSE crosic.get_intersection_geom(highway2, btwn2, direction_btwn2::TEXT, metres_btwn2::FLOAT, int_id1)
+				END);
+
+	oid2_geom  GEOMETRY = ST_GeomFromText(text_arr_oid2[1], 26917);
 
 
 	-- create a line between the two intersection geoms
@@ -545,7 +598,7 @@ DECLARE
 				(
 				SELECT *  
 				FROM crosic.centreline_case1(direction_btwn2, metres_btwn2, crosic.match_line_to_centreline(line_geom, highway2, metres_btwn1, metres_btwn2), line_geom, 
-				crosic.get_intersection_geom(highway2, btwn1, NULL, NULL),crosic.get_intersection_geom(highway2, btwn2, NULL, NULL))
+				ST_GeomFromText((crosic.get_intersection_geom(highway2, btwn1, NULL::TEXT, NULL::FLOAT, 0))[1], 26917) )
 				)
 
 				ELSE 
@@ -553,14 +606,17 @@ DECLARE
 				SELECT * 
 				FROM crosic.centreline_case2(direction_btwn1, direction_btwn2, metres_btwn1, metres_btwn2, crosic.match_line_to_centreline(line_geom, highway2, metres_btwn1, metres_btwn2), line_geom, 
 				-- get the original intersection geoms (not the translated ones) 
-				crosic.get_intersection_geom(highway2, btwn1, NULL, NULL), crosic.get_intersection_geom(highway2, btwn2, NULL, NULL))
+				ST_GeomFromText((crosic.get_intersection_geom(highway2, btwn1, NULL::TEXT, NULL::FLOAT, 0))[1], 26917),(CASE WHEN btwn2_orig LIKE '%point%' AND (btwn2_check NOT LIKE '% of %' OR btwn2_check LIKE ('% of ' || TRIM(btwn1)))
+				THEN ST_GeomFromText((crosic.get_intersection_geom(highway2, btwn2, NULL::TEXT, NULL::FLOAT, 0))[1], 26917)
+				ELSE ST_GeomFromText((crosic.get_intersection_geom(highway2, btwn2, NULL::TEXT, NULL::FLOAT, int_id1))[1], 26917)
+				END))
 				)
 				END
 				);
 
 
 	-- sum of the levenshtein distance of both of the intersections matched
-	lev_sum INT := (crosic.get_intersection_id(highway2, btwn1))[2] + (crosic.get_intersection_id(highway2, btwn2))[2];
+	lev_sum INT := text_arr_oid1[3]::INT + text_arr_oid2[3]::INT; -- (crosic.get_intersection_id(highway2, btwn1))[2] + (crosic.get_intersection_id(highway2, btwn2))[2];
 
 	-- confidence value
 	con TEXT := (
@@ -571,8 +627,8 @@ DECLARE
 		WHEN lev_sum = 1
 		THEN 'High (1 character difference)'
 		WHEN lev_sum IN (2,3)
-		THEN 'Medium (2 or 3 character difference)'
-		ELSE 'Low (more than 3 character difference)'
+		THEN FORMAT('Medium (%s character difference)', lev_sum::TEXT)
+		ELSE FORMAT('Low (%s character difference)', lev_sum::TEXT)
 		END
 	);
 	
@@ -580,7 +636,7 @@ DECLARE
 BEGIN 
 
 
-	raise notice 'btwn1: % btwn2: % highway2: % metres_btwn1: %  metres_btwn2: % direction_btwn1: % direction_btwn2: % cntreline_segments: %', btwn1, btwn2, highway2, metres_btwn1, metres_btwn2, direction_btwn1, direction_btwn2, ST_ASText(centreline_segments);
+	raise notice 'btwn1: % btwn2: % btwn2_check: %  highway2: % metres_btwn1: %  metres_btwn2: % direction_btwn1: % direction_btwn2: % cntreline_segments: %', btwn1, btwn2, btwn2_check, highway2, metres_btwn1, metres_btwn2, direction_btwn1, direction_btwn2, ST_ASText(ST_Transform(centreline_segments, 4326));
 	
 
 RETURN QUERY (SELECT ST_AsText(centreline_segments), con);
