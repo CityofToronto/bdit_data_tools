@@ -3,7 +3,7 @@
 We have street network layers. We can use [pgrouting]() to route from one (or
 more) point(s) to any other point within that network. This is helpful for
 determining a user's path but can also be useful for selecting all street
-segments between arbitrary points (like intersections). Official documentation on pgRouting can be found (here)[http://docs.pgrouting.org/latest/en/pgr_dijkstra.html]. 
+segments between arbitrary points (like intersections). Official documentation on pgRouting can be found [here](http://docs.pgrouting.org/latest/en/pgr_dijkstra.html). 
 
 Note that there are one to one, one to many, many to one and many to many functions in pgRouting. \
 There are also the directed and undirected parameters. Directed is when direction is taken in to consideration when routing. The default is **directed**.
