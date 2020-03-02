@@ -6,22 +6,22 @@ determining a user's path but can also be useful for selecting all street
 segments between arbitrary points (like intersections). Official documentation on pgRouting can be found [here](http://docs.pgrouting.org/latest/en/pgr_dijkstra.html). 
 
 Note that there are one to one, one to many, many to one and many to many functions in pgRouting. \
-There are also the directed and undirected parameters. Directed is when direction is taken in to consideration when routing. The default is **directed**.
+There are also the directed and undirected parameters. Directed is when direction is taken into consideration during the routing process. The default is **directed**.
 
 ## To begin
 We need to prepare three things, \
 a) the network (routes) for routing \
-b) the start point \
+b) the starting point \
 c) the end point 
 
 There are currently two networks that we are using: \
-i) HERE network `here.routing_streets_18_3`
-- start and end points are `px_start` and `px_end`
+i) **HERE** network `here.routing_streets_18_3`
+- starting and end points are `px_start` and `px_end`
 - `link_dir` is routed
 
-ii) GIS centrelines network `gis.centreline_routing_undirected` \
-( created using [`view_centreline_undirected.sql`](view_centreline_undirected.sql) prepares two views for nodes and links that are streets (excluding laneways))
-- start and end points are intersection points \
+ii) **GIS centrelines** network `gis.centreline_routing_undirected` \
+( created using [`view_centreline_undirected.sql`](view_centreline_undirected.sql) which prepares two views for nodes and links that are streets (excluding laneways))
+- starting and end points are intersection points \
 (`source` and `target` in the network table) or (`fnode` and `tnode` in `gis.centreline`)
 - centrelines' `geo_id` is routed
 
@@ -58,9 +58,9 @@ The results from the simple query above will return 6 columns as shown below
 4|4|9|16|1|3|
 5|5|4|3|1|4|
 
-Column `node` correspond to the source column (`px_start` or `int_start`) \
-Column `egde` correspond to the routes in network table 
-(`id` in `here.routing_streets_18_3` which can be used to find the `link_dir`)
+Column `node` corresponds to the source column (`px_start` or `int_start`) whereas \
+column `egde` corresponds to the routes in the network table \
+(`id` in `here.routing_streets_18_3` which can be used to find the `link_dir`) \
 (`id` in `gis.centreline_routing_undirected` which is the same as `geo_id` in `gis.centreline`)
 
-We can then link to their respective tables stated above to get `geom` etc for the routes (links / centrelines)
+We can then use that information to link to their respective tables stated above to get `geom` etc for the routes (links / centrelines)
