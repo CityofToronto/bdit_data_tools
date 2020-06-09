@@ -17,12 +17,18 @@ c) the end point
 > Examples of how the views are prepared can be found [here at routing with traffic data](https://github.com/CityofToronto/bdit_data-sources/tree/master/here#routing-with-traffic-data).
 
 There are currently two networks that we are using: \
-i) **HERE** network `here.routing_streets_18_3`
+i) **HERE** network \
+(*NOTE:* `px_start` & `px_end` are traffic lights whereas `source` & `target` are nodes that connect the `link_dir` \
+Ideally, finding the nodes and route them gives us better results rather than finding the closest nodes from px aka traffic light aka intersection then route them. Although, px's are the ones provided when people are requesting for data)
+
+- network: mat view `here.routing_streets_19_4` or `here.routing_streets_19_4_ped` or other depending on your usage
 - starting and end points are `px_start` and `px_end`
 - `link_dir` is routed
 
-ii) **GIS centrelines** network `gis.centreline_routing_undirected` \
+ii) **GIS centrelines** network  \
 ( created using [`view_centreline_undirected.sql`](view_centreline_undirected.sql) which prepares two views for nodes and links that are streets (excluding laneways))
+
+- network: mat view `gis.centreline_directional` or `gis.centreline_routing_undirected_lfname` or other depending on your usage
 - starting and end points are intersection points \
 (`source` and `target` in the network table) or (`fnode` and `tnode` in `gis.centreline`)
 - centrelines' `geo_id` is routed
@@ -87,3 +93,61 @@ The output parameters are:
 > (`id` in `gis.centreline_routing_undirected` is the same as `geo_id` in `gis.centreline`)
 
 We can then use that information to link to their respective tables stated above to get `geom` etc for the routes (links / centrelines).
+
+
+
+
+## Difference between ONE-to-ONE and MANY-to-MANY routing
+
+Official documentation on pgRouting can be found [here](http://docs.pgrouting.org/latest/en/pgr_dijkstra.html). We normally use directional ONE-to-ONE routing for most of the routing but the process may take up a long time. It sounds pretty counterintuitive but MANY-to-MANY routing is actually much faster when you have many pairs of source and target to route. For example, a ONE-to-ONE routing takes about 2.5 seconds for a pair of source and target whereas a MANY-to-MANY routing takes about 2.3 seconds for 10 pairs of source and target. The reason is that every single time the ONE-to-ONE routing process is run, **pgr_dijkstra** will reload the whole network and route the pair of source and target. Whereas if one does MANY-to-MANY routing, the process will use the same network and try to route every `source` in the `source_array` to every `target` in the `target_array`. \
+**Note:** I'm using `source` and `target` here but they are applicable in both HERE and GIS network.
+
+### Steps to do MANY-to-MANY routing
+It's the same as what has stated above but the only main difference is that we need to prepare an array of `source` and an array of `target`. We might also want to use `path_seq` instead of `seq` in order to know the sequence of the path routed since `seq` represents the sequence of all paths resulted from the array of sources and targets and not the particular pair of source and target.
+
+An example of that can be shown [here](https://github.com/CityofToronto/bdit_data_analysis/blob/tts/tts/sql/bottleneck/create-function-new_get_links_btwn_nodes_for_cluster.sql) which is a function to route TTS zones/centroid. A little summary on how the code works is shown below.
+
+#### i) L21 - L28 
+```
+FROM (SELECT array_agg(source_id)::INT[] as sources, 
+        array_agg(target_id)::INT[] as targets 
+  FROM (SELECT dense_rank() OVER(ORDER BY od.row_number) as id, 
+        od.start_node AS source_id, od.end_node AS target_id 
+        FROM tts.cluster_id_to_od_pairs od
+        WHERE cluster_id = _cluster_id
+       ) sample
+ GROUP BY id/250 ) ods,
+```
+shows how we are reading each pair of source and target and put that in an array.
+**NOTE:** It's utterly important to make sure that the array contains only **DISTINCT** source or target in order to prevent the same route from being routed twice. (which was not implemented in the code above)
+
+#### ii) L29 - L35 
+```
+LATERAL pgr_dijkstra(format('SELECT id, source::int, target::int, length::int as cost 
+                     FROM here.routing_streets_19_4_ped
+                     WHERE link_dir NOT IN 
+                     (SELECT link_dir
+                        FROM tts.cluster_id_to_here_links  
+                        WHERE cluster_id = %s)', _cluster_id),
+                     sources, targets, TRUE) routing_results
+```
+shows how we are inputting `sources` and `targets` into pgr_dijkstra, `TRUE` indicates that it's directional routing whereas the SELECT statement is selecting the network that we want (which in this case, excluding link_dir found in another table where cluster_id matches). Note that the same network will then be used for the arrays of sources and targets. Therefore, if network is changing for each pair of source and target, one might want to consider grouping them together. For this case shown here, we're grouping them according to cluster_id. 
+
+#### iii) L36 - L39
+```
+INNER JOIN (SELECT flow.row_number, flow.gghv4_orig, flow.gghv4_dest, flow.start_node, flow.end_node,
+flow.cycle_total, flow.walk_total, flow.transit_total, flow.total_flow
+FROM tts.new_distinct_od_flow_nodes flow
+ ) trips ON trips.start_node = routing_results.start_vid AND trips.end_node = routing_results.end_vid
+ ```
+shows how we are then filtering the results by making sure that the pair of start_vid & end_vid is the same as the pair of start_node & end_node that we want to route at the first place.
+
+#### iv) L40
+```
+INNER JOIN here.routing_streets_19_4_ped here ON routing_results.edge=here.id
+```
+allows us to retrieve all information that we want to know about the link_dir routed from the network table. For example, the length, geometry etc.
+
+
+## How to optimize routing
+For 20,000 pairs of sources and targets, running a ONE-to-ONE routing process may take up to 14 hours where running a MANY-to-MANY routing may take up to 2 hours to complete. Therefore, using a MANY-to-MANY routing process is highly encouraged when one has many pairs to route. However, if that process still takes too long to run, one can try to use `ThreadedConnectionPool` for the routing process where there are about 4 to 6 workers (you define it) in the connection pool that will carry out the processing. Examples on that can be found [here](https://github.com/CityofToronto/bdit_vfh/blob/master/routing/route.py) where it was used to 5-minutes bin for the VFH project.
