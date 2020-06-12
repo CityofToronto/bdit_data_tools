@@ -16,7 +16,7 @@ processing time might take wayy longer.*
 Since the data obtained came in 3 different csv files, those three files are combined so that we can find out the flow for each mode
 of transport for each distinct OD pair. Query as shown below.
 ```
-CREATE TABLE tts.new_distinct_od_flow AS
+CREATE TABLE tts.distinct_od_flow AS
 WITH combined AS (
 SELECT DISTINCT ON (gghv4_orig, gghv4_dest) gghv4_orig, gghv4_dest
 FROM tts.tts_2016_cycle
@@ -45,7 +45,7 @@ the centroid of a zone is found and that point is then matched to the closest HE
 HERE nodes that are present on the HERE network that we are using for routing. 
 The query is shown below and the process took only 5 minutes to run.
 ```
-CREATE TABLE tts.new_centroid_and_here_nodes AS
+CREATE TABLE tts.centroid_and_here_nodes AS
 WITH valid_nodes AS (
 --120290 nodes in total
 --seprated so that query run wayyyyyy faster
@@ -87,24 +87,24 @@ LIMIT 1) found
 Once the closest nodes are found for each zone, link them back to the OD pairs and put them in the same table to prepare for routing.
 Index is created too so that the routing process can run faster.
 ```
-CREATE TABLE tts.new_distinct_od_flow_nodes AS
+CREATE TABLE tts.distinct_od_flow_nodes AS
 WITH origin AS (
 SELECT row_number() OVER () AS row_number,
 od.gghv4_orig, od.gghv4_dest, od.cycle_total, od.walk_total, od.transit_total, od.total_flow,
 nodes.node_id AS start_node, nodes.node_geom AS start_geom
-FROM tts.new_distinct_od_flow od
-LEFT JOIN tts.new_centroid_and_here_nodes nodes
+FROM tts.distinct_od_flow od
+LEFT JOIN tts._centroid_and_here_nodes nodes
 ON od.gghv4_orig = nodes.taz_no
 	)
 SELECT origin.*, nodes.node_id AS end_node, nodes.node_geom AS end_geom
 FROM origin
-LEFT JOIN tts.new_centroid_and_here_nodes nodes
+LEFT JOIN tts.centroid_and_here_nodes nodes
 ON origin.gghv4_dest = nodes.taz_no
 ORDER BY row_number
 
 --created index too so that they run faster for pgrouting
-CREATE INDEX new_distinct_od_flow_nodes_nodes_idx
-    ON tts.new_distinct_od_flow_nodes USING btree
+CREATE INDEX distinct_od_flow_nodes_nodes_idx
+    ON tts.distinct_od_flow_nodes USING btree
     (start_node ASC NULLS LAST, end_node ASC NULLS LAST)
     TABLESPACE pg_default;
 ```
@@ -112,7 +112,7 @@ CREATE INDEX new_distinct_od_flow_nodes_nodes_idx
 ### 4a. ~Route using ONE-to-ONE routing~ (which got aborted due to long processing time)
 Create a function to do the routing and find information about the link_dir routed. 
 ```
-CREATE OR REPLACE FUNCTION tts.new_get_links_btwn_nodes(
+CREATE OR REPLACE FUNCTION tts.get_links_btwn_nodes(
 	_start_node integer,
 	_end_node integer)
     RETURNS TABLE (start_node integer, end_node integer, seq integer, link_dir text, length double precision, geom geometry)
@@ -143,18 +143,18 @@ $BODY$;
 ```
 Then, route each distinct OD pair but the process is anticipated to take almost 13 hours and so this was aborted.
 ```
-CREATE TABLE tts.new_distinct_od_flow_nodes_routed AS
+CREATE TABLE tts.distinct_od_flow_nodes_routed AS
 SELECT ids.row_number, ids.gghv4_orig, ids.gghv4_dest, 
 ids.cycle_total, ids.walk_total, ids.transit_total, ids.total_flow,
 rout.*
-FROM tts.new_distinct_od_flow_nodes ids,
-LATERAL tts.new_get_links_btwn_nodes(start_node, end_node) AS rout
+FROM tts.distinct_od_flow_nodes ids,
+LATERAL tts.get_links_btwn_nodes(start_node, end_node) AS rout
 ```
 
 ### 4b. Route using MANY-to-MANY routing 
 The process below took only 11 minutes to complete which is such a great improvement compared to 4a.
 ```
-CREATE TABLE tts.new_distinct_od_flow_nodes_routed AS 
+CREATE TABLE tts.distinct_od_flow_nodes_routed AS 
 SELECT row_number, gghv4_orig, gghv4_dest, start_node, end_node, 
 cycle_total, walk_total, transit_total, total_flow,
 	routing_results.seq, here.link_dir, here.length AS here_length, 
@@ -163,14 +163,14 @@ ST_Length(ST_Transform(here.geom, 2952)) AS geom_length, here.geom
 			array_agg(target_id)::INT[] as targets 
 	  FROM (SELECT row_number, 
 			start_node AS source_id, end_node AS target_id 
-			FROM tts.new_distinct_od_flow_nodes 
+			FROM tts.distinct_od_flow_nodes 
 		   ) sample
 	 GROUP BY row_number/250 ) ods,
 	LATERAL pgr_dijkstra('SELECT id, source::int, target::int, length::int as cost FROM here.routing_streets_19_4_ped',
 						 sources, targets, TRUE) routing_results
 	INNER JOIN (SELECT row_number, gghv4_orig, gghv4_dest, start_node, end_node,
 	cycle_total, walk_total, transit_total, total_flow
-	FROM tts.new_distinct_od_flow_nodes
+	FROM tts.distinct_od_flow_nodes
 	 ) trips ON start_node = start_vid AND end_node = end_vid
 	 INNER JOIN here.routing_streets_19_4_ped here ON routing_results.edge=here.id
 	 ORDER BY row_number, seq
@@ -179,11 +179,11 @@ ST_Length(ST_Transform(here.geom, 2952)) AS geom_length, here.geom
 ### 5. Find flows for each link_dir 
 Each link_dir is assigned with a SUM(flow) depending on which OD pair it is involved in. Query as shown below.
 ```
-CREATE TABLE tts.new_flow_for_each_link AS 
+CREATE TABLE tts.flow_for_each_link AS 
 SELECT link_dir, here_length, geom_length, geom, SUM(cycle_total) AS sum_cycle, 
 SUM(walk_total) AS sum_walk, SUM(transit_total) AS sum_transit, 
 SUM(total_flow) AS sum_total_flow
-FROM tts.new_distinct_od_flow_nodes_routed
+FROM tts.distinct_od_flow_nodes_routed
 GROUP BY link_dir, here_length, geom_length, geom
 ```
 
@@ -215,20 +215,15 @@ A little fact/summary on the data can be found
 ```
 CREATE VIEW tts.cluster_id_flow_greater_500 AS
 WITH links AS (
-SELECT geo_id, cluster_id, pp_link_dir
-FROM (
-SELECT geo_id, cluster_id 
-FROM covid_gis.pinchpoints_bridge_underpass_min pin
-JOIN covid_gis.over_under_pass_cl bottle
-ON pin.gid::numeric = bottle.geo_id AND pin.the_geom = bottle.geom
-	) clust
+SELECT geo_id, cluster_id, pp_link_dir 
+FROM covid_gis.clustered_bottleneck_links
 LEFT JOIN tts.bottleneck_here_crosstable
 USING (geo_id)
 	)
 , combined AS (
 SELECT * FROM tts.new_flow_for_each_link
 WHERE link_dir IN (SELECT pp_link_dir FROM links)
-AND sum_total_flow > 500 	--might change later depending on the results
+AND sum_total_flow > 500 				--might change later depending on the results
 )
 SELECT DISTINCT (cluster_id)
 FROM combined
@@ -239,43 +234,35 @@ ON combined.link_dir = links.pp_link_dir
 ### 3. Create cross tables required for routing purposes
 #### 3a. Link cluster id to HERE links 
 ```
-CREATE VIEW tts.cluster_id_to_here_links AS
+CREATE OR REPLACE VIEW tts.cluster_id_to_here_links AS
 WITH links AS (
-SELECT geo_id, cluster_id, pp_link_dir
-FROM (
-SELECT geo_id, cluster_id 
-FROM covid_gis.pinchpoints_bridge_underpass_min pin
-JOIN covid_gis.over_under_pass_cl bottle
-ON pin.gid::numeric = bottle.geo_id AND pin.the_geom = bottle.geom
-	) clust
+SELECT geo_id, cluster_id, pp_link_dir 
+FROM covid_gis.clustered_bottleneck_links
 LEFT JOIN tts.bottleneck_here_crosstable
 USING (geo_id)
 	)
 , combined AS (
-SELECT * FROM tts.new_flow_for_each_link
+SELECT * FROM tts.flow_for_each_link
 WHERE link_dir IN (SELECT pp_link_dir FROM links)
 )
-SELECT links.geo_id, links.cluster_id, combined.link_dir, combined.geom_length, combined.sum_total_flow
+SELECT DISTINCT ON (cluster_id, link_dir)
+links.geo_id, links.cluster_id, combined.link_dir, combined.geom_length, combined.sum_total_flow
 FROM combined
 LEFT JOIN links 
 ON combined.link_dir = links.pp_link_dir
+order by cluster_id, link_dir
 ```
 #### 3b. Link cluster id to OD pairs 
 ```
 CREATE VIEW tts.cluster_id_to_od_pairs AS
 WITH links AS (
-SELECT geo_id, cluster_id, pp_link_dir
-FROM (
-SELECT geo_id, cluster_id 
-FROM covid_gis.pinchpoints_bridge_underpass_min pin
-JOIN covid_gis.over_under_pass_cl bottle
-ON pin.gid::numeric = bottle.geo_id AND pin.the_geom = bottle.geom
-	) clust
+SELECT geo_id, cluster_id, pp_link_dir 
+FROM covid_gis.clustered_bottleneck_links
 LEFT JOIN tts.bottleneck_here_crosstable
 USING (geo_id)
 	)
 , combined AS (
-SELECT * FROM tts.new_distinct_od_flow_nodes_routed
+SELECT * FROM tts.distinct_od_flow_nodes_routed
 WHERE link_dir IN (SELECT pp_link_dir FROM links)
 )
 SELECT DISTINCT ON (links.cluster_id, combined.row_number) 
@@ -289,13 +276,10 @@ ORDER BY cluster_id, row_number
 
 ### 4. Create function for MANY-to-MANY routing
 ```
-CREATE OR REPLACE FUNCTION tts.new_get_links_btwn_nodes_for_cluster(
+CREATE OR REPLACE FUNCTION tts.get_links_btwn_nodes_for_cluster(
 	_cluster_id integer)
-    RETURNS TABLE
-	(row_number bigint, gghv4_orig integer, gghv4_dest integer, start_node integer, end_node integer, 
-	 cycle_total integer, walk_total integer, transit_total integer, total_flow bigint,
-	seq integer, link_dir text, length double precision, geom_length double precision, geom geometry)
-	LANGUAGE 'plpgsql'
+    RETURNS TABLE(row_number bigint, gghv4_orig integer, gghv4_dest integer, start_node integer, end_node integer, cycle_total integer, walk_total integer, transit_total integer, total_flow bigint, seq integer, path_seq integer, agg_cost double precision, link_dir text, length double precision, geom_length double precision, geom geometry) 
+    LANGUAGE 'plpgsql'
 
     COST 100
     STABLE STRICT 
@@ -307,14 +291,15 @@ RETURN QUERY
 
 SELECT trips.row_number, trips.gghv4_orig, trips.gghv4_dest, trips.start_node, trips.end_node, 
 trips.cycle_total, trips.walk_total, trips.transit_total, trips.total_flow,
-	routing_results.seq, here.link_dir, here.length, 
+	routing_results.seq, routing_results.path_seq, routing_results.agg_cost, 
+	here.link_dir, here.length AS here_length, 
 ST_Length(ST_Transform(here.geom, 2952)) AS geom_length, here.geom
-	FROM (SELECT array_agg(source_id)::INT[] as sources, 
-			array_agg(target_id)::INT[] as targets 
+	FROM (SELECT array_agg(DISTINCT(source_id))::INT[] as sources, 
+			array_agg(DISTINCT(target_id))::INT[] as targets 
 	  FROM (SELECT dense_rank() OVER(ORDER BY od.row_number) as id, 
 			od.start_node AS source_id, od.end_node AS target_id 
-			FROM tts.cluster_id_to_od_pairs od
-			WHERE cluster_id = _cluster_id
+			FROM tts.cluster_id_to_od_pairsod
+			WHERE od.cluster_id = _cluster_id
 		   ) sample
 	 GROUP BY id/250 ) ods,
 	LATERAL pgr_dijkstra(format('SELECT id, source::int, target::int, length::int as cost 
@@ -326,7 +311,7 @@ ST_Length(ST_Transform(here.geom, 2952)) AS geom_length, here.geom
 						 sources, targets, TRUE) routing_results
 	INNER JOIN (SELECT flow.row_number, flow.gghv4_orig, flow.gghv4_dest, flow.start_node, flow.end_node,
 	flow.cycle_total, flow.walk_total, flow.transit_total, flow.total_flow
-	FROM tts.new_distinct_od_flow_nodes flow
+	FROM tts.distinct_od_flow_nodes flow
 	 ) trips ON trips.start_node = routing_results.start_vid AND trips.end_node = routing_results.end_vid
 	 INNER JOIN here.routing_streets_19_4_ped here ON routing_results.edge=here.id
 	 ORDER BY row_number, seq;
@@ -340,12 +325,63 @@ $BODY$;
 ### 5. Route only for cluster_id with flow > 500 
 Out of 18814 routable ones, 929 of them do not need to reroute. Route those cluster_id with the function created above.
 ```
-CREATE TABLE tts.new_distinct_od_flow_nodes_routed_no_bottleneck AS
+CREATE TABLE tts.distinct_od_flow_nodes_routed_no_bottleneck AS
 SELECT ids.*, rout.*
 FROM tts.cluster_id_flow_greater_500 ids,
-LATERAL tts.new_get_links_btwn_nodes_for_cluster(cluster_id) AS rout
+LATERAL tts.get_links_btwn_nodes_for_cluster(cluster_id) AS rout
 ```
 
-### 6. Calculate bottleneck metrics
-This step is not exactly part of the routing but I'm including it for entirety. Will update this section once the method has been 
-finalised.
+### 6. Filter routed routes to only those that we are interested of
+The routing results return wayyyy too many rows and the reasons is due to [this](https://github.com/CityofToronto/bdit_data_tools/tree/routing/routing#iv-l38) (the NOTE part)
+```
+CREATE MATERIALIZED VIEW tts.distinct_od_flow_nodes_routed_no_bottleneck_unique_filt
+TABLESPACE pg_default
+AS
+ SELECT fil.cluster_id, fil.row_number, routed.cycle_total, routed.walk_total, routed.transit_total, routed.total_flow,
+    routed.link_dir, routed.length AS here_length, routed.geom_length
+   FROM tts.distinct_od_flow_nodes_routed_no_bottleneck_unique routed
+     JOIN ( SELECT cluster_id_flow_greater_500.cluster_id, cluster_id_to_od_pairs.row_number,
+	     FROM tts.cluster_id_flow_greater_500
+             JOIN tts.cluster_id_to_od_pairs USING (cluster_id)) fil USING (cluster_id, row_number)
+```
+
+### 7. Calculate bottleneck metrics
+This step is not exactly part of the routing but I'm including it for entirety. Since the routing was done based on HERE lengths, it 
+only make sense to caluculate bottleneck metrics using here_length instead of the length from the geometry.
+```
+CREATE MATERIALIZED VIEW tts.bottleneck_metrics_unique_june12 AS
+WITH od_pair1 AS (
+SELECT row_number,
+total_flow AS total_flow1,
+sum(here_length) AS here_length1,
+sum(st_length(st_transform(geom, 2952))) AS routed_length
+FROM tts.distinct_od_flow_nodes_routed_unique
+GROUP BY row_number, total_flow
+)
+, od_pair2 AS (
+SELECT cluster_id,
+row_number,
+total_flow AS total_flow2,
+sum(here_length) AS here_length2,
+sum(geom_length) AS rerouted_length
+FROM tts.distinct_od_flow_nodes_routed_no_bottleneck_unique_filt
+GROUP BY cluster_id, row_number, total_flow 
+)
+, diff AS (
+SELECT cluster_id,
+ row_number, total_flow1, 
+	(here_length2 - here_length1) AS diff_here_length,
+	(rerouted_length - routed_length) AS diff_geom_length
+FROM od_pair1 
+INNER JOIN od_pair2
+USING (row_number)
+	)
+SELECT cluster_id,
+SUM(total_flow1) AS tot_flow,
+SUM(diff_here_length * total_flow1) AS diffxflow,
+SUM(diff_here_length * total_flow1) / SUM(total_flow1) AS avg_detour
+FROM diff
+GROUP BY cluster_id
+```
+
+### VOILA!!
