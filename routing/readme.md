@@ -102,23 +102,23 @@ Official documentation on pgRouting can be found [here](http://docs.pgrouting.or
 ## Steps to do MANY-to-MANY routing
 It's the same as what has stated above but the only main difference is that we need to prepare an array of `source` and an array of `target`. We might also want to use `path_seq` instead of `seq` in order to know the sequence of the path routed since `seq` represents the sequence of all paths resulted from the array of sources and targets and not the particular pair of source and target.
 
-An example of that can be shown [here](https://github.com/CityofToronto/bdit_data_analysis/blob/tts/tts/sql/bottleneck/create-function-new_get_links_btwn_nodes_for_cluster.sql) which is a function to route TTS zones/centroid. A little summary on how the code works is shown below.
+An example of that can be shown [here](https://github.com/CityofToronto/bdit_data_analysis/blob/tts/tts/sql/bottleneck/create-function-get_links_btwn_nodes_for_cluster.sql) which is a function to route TTS zones/centroid. A little summary on how the code works is shown below.
 
-### i) L21 - L28 
+### i) L19 - L26 
 ```
-FROM (SELECT array_agg(source_id)::INT[] as sources, 
-        array_agg(target_id)::INT[] as targets 
+FROM (SELECT array_agg(DISTINCT(source_id))::INT[] as sources, 
+        array_agg(DISTINCT(target_id))::INT[] as targets 
   FROM (SELECT dense_rank() OVER(ORDER BY od.row_number) as id, 
         od.start_node AS source_id, od.end_node AS target_id 
-        FROM tts.cluster_id_to_od_pairs od
-        WHERE cluster_id = _cluster_id
+        FROM tts.cluster_id_to_od_pairsod
+        WHERE od.cluster_id = _cluster_id
        ) sample
  GROUP BY id/250 ) ods,
 ```
 shows how we are reading each pair of source and target and put that in an array.
-**NOTE:** It's utterly important to make sure that the array contains only **DISTINCT** source or target in order to prevent the same route from being routed twice. (which was not implemented in the code above)
+**NOTE:** It's utterly important to make sure that the array contains only **DISTINCT** source or target in order to prevent the same route from being routed twice.
 
-### ii) L29 - L35 
+### ii) L27 - L33 
 ```
 LATERAL pgr_dijkstra(format('SELECT id, source::int, target::int, length::int as cost 
                      FROM here.routing_streets_19_4_ped
@@ -130,20 +130,25 @@ LATERAL pgr_dijkstra(format('SELECT id, source::int, target::int, length::int as
 ```
 shows how we are inputting `sources` and `targets` into pgr_dijkstra, `TRUE` indicates that it's directional routing whereas the SELECT statement is selecting the network that we want (which in this case, excluding link_dir found in another table where cluster_id matches). Note that the same network will then be used for the arrays of sources and targets. Therefore, if network is changing for each pair of source and target, one might want to consider grouping them together. For this case shown here, we're grouping them according to cluster_id. 
 
-### iii) L36 - L39
+### iii) L34 - L37
 ```
 INNER JOIN (SELECT flow.row_number, flow.gghv4_orig, flow.gghv4_dest, flow.start_node, flow.end_node,
 flow.cycle_total, flow.walk_total, flow.transit_total, flow.total_flow
-FROM tts.new_distinct_od_flow_nodes flow
+FROM tts.distinct_od_flow_nodes flow
  ) trips ON trips.start_node = routing_results.start_vid AND trips.end_node = routing_results.end_vid
  ```
 shows how we are then filtering the results by making sure that the pair of start_vid & end_vid is the same as the pair of start_node & end_node that we want to route at the first place.
 
-### iv) L40
+### iv) L38
 ```
 INNER JOIN here.routing_streets_19_4_ped here ON routing_results.edge=here.id
 ```
 allows us to retrieve all information that we want to know about the link_dir routed from the network table. For example, the length, geometry etc.
+
+**NOTE:** This process has actually included/matched all possible OD pairs from table `tts.distinct_od_flow_nodes` due to the process in L34 - L37 which might explain why a cluster_id got routed to more OD pairs than neccessary since other OD pairs may exist in that array of sources and targets. Therefore, a cleaning process is done later on, although a change in this process is highly encouraged to avoid routing results to be enormous.
+
+### v) Cleaning up / Filtering only OD pairs we want
+The actual code can be found [here](https://github.com/CityofToronto/bdit_data_analysis/blob/tts/tts/sql/bottleneck/create-mat-view-distinct_od_flow_nodes_routed_no_bottleneck_unique_filt.sql). All we have to do is to simply join it the the pairs of cluster_id and OD pairs that we are interested in. *One can also look at the results on MAX(agg_cost) and SUM(here_length) for each cluster_id & OD pairs to double check on accuracy*
 
 
 # How to optimize routing
