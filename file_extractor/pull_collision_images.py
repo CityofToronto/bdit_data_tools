@@ -38,33 +38,39 @@ def cli():
 @click.option('--identifier', default = None, help='8 digits under the column ACCNB')
 # Add ', multiple=True' if reading in a list instead of a string
 
-# GET DATE INFORMATINO FROM LOOKUP TABLE
+# GET DATE INFORMATION FROM LOOKUP TABLE
 def get_date(identifier):
-
-    logger.info('Pulling for identifier = %s', identifier)
 
     with open('Collision Test/lookup.csv','r') as lookuplist:
         reader = csv.reader(lookuplist)
         dic = {rows[0]:rows[1] for rows in reader}
-        str_found = dic[str(identifier)] 
+        str_found = dic.get(str(identifier))
 
-        date = datetime.datetime.strptime(str(str_found), '%d-%b-%y').date()
-        #accdate = date.strftime("%Y-%m-%d")
-        yr =  date.strftime('%Y')
-        mth =  date.strftime('%m')
+        if str_found:
+            logger.info('Pulling for identifier = %s', identifier)
+            date = datetime.datetime.strptime(str(str_found), '%d-%b-%y').date()
+            #accdate = date.strftime("%Y-%m-%d")
+            yr =  date.strftime('%Y')
+            mth =  date.strftime('%m')
 
-    try:
-        copy_file(yr, mth)
-    except Exception:
-        logger.critical(traceback.format_exc())
+            try:
+                copy_file(identifier, yr, mth)
+            except Exception:
+                logger.critical(traceback.format_exc())
 
-# NAVIGATE TO THE FILE AND COPY FILES & INDICATE IN OUTPUT CSV FILE
-def copy_file(yr, mth):
-    logger.info('Copying files found for year = %s and month = %s into destination folder' %(yr, mth))
+        else: 
+            logger.warning('Identifier = %s is not found', identifier)
+            with open('destination/results.csv', 'a') as output:
+                writer = csv.writer(output)
+                out = [identifier, 'Missing in the lookup table']
+                writer.writerow(out)
+
+# NAVIGATE TO THE FILE AND COPY FILES & INDICATE IN THE OUTPUT CSV FILE
+def copy_file(identifier, yr, mth):
+    logger.info('Navigating to folder where year = %s and month = %s' %(yr, mth))
 
     file_path = '/home/jchew/local/file_extractor/Collision Test/' + yr + '/' + mth + '/'
     dest = '/home/jchew/local/file_extractor/destination/'
-    # results_file = '/home/jchew/local/file_extractor/destination/results.csv'
 
     # to get list of files in the folder
     src_folder = os.listdir(file_path) 
@@ -72,33 +78,27 @@ def copy_file(yr, mth):
 
     ls = []
     for file_name in src_folder:
-        # to get full file path
-        full_file_name = os.path.join(file_path, file_name)
-
-        # to only copy any regular files and not sub-directories
-        if os.path.isfile(full_file_name):
+        # only copy files where name = identifier
+        if file_name.split('.')[0] == identifier:
+            # to get full file path
+            full_file_name = os.path.join(file_path, file_name)
             shutil.copy(full_file_name, dest)
             ls.append(file_name)
 
-    try:
-        update_csv(ls)
-    except Exception:
-        logger.critical(traceback.format_exc())
-
-def update_csv(ls):
-    # record down whether the image is found or missing
-    with open('Collision Test/lookup.csv', 'r') as input_file:
-        with open('destination/results.csv', 'w') as output:
-            reader = csv.reader(input_file)
+    logger.info('Updating csv file for image found = %s', ls)
+    # when images are found
+    if ls:
+        with open('destination/results.csv', 'a') as output:
             writer = csv.writer(output)
-            for file_name in ls:
-                for item in reader:
-                    if file_name[0:8] == item[0]:
-                        item.append('Found')
-                        writer.writerow(item)
-                    # else:
-                    #     item.append('Missing')
-                    #     writer.writerow(item)
+            out = [identifier, 'Found']
+            writer.writerow(out)
+
+    # when images are not found
+    else: 
+        with open('destination/results.csv', 'a') as output:
+            writer = csv.writer(output)
+            out = [identifier, 'Missing in the folder']
+            writer.writerow(out)
 
 if __name__ == '__main__':
     cli()
