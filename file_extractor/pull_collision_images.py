@@ -17,10 +17,14 @@ def logger():
 logger=logger()
 logger.debug('Start')
 
+# DEFINE SOURCE AND TARGET FILE
+source_file = 'Collision Test/lookup.csv'
+target_file = 'destination/results.csv'
+
 # GET IDENTIFIER & DATE INFORMATION FROM LOOKUP TABLE
 def get_date():
-    with open('Collision Test/lookup.csv','r') as lookuplist:
-        next(lookuplist) # or next(reader) ???
+    with open(source_file,'r') as lookuplist:
+        next(lookuplist) # to skip header
         reader = csv.reader(lookuplist)
         dic = {rows[0]:rows[1] for rows in reader}
         ids = dic.keys()
@@ -59,14 +63,14 @@ def copy_file(identifier, dic, yr, mth):
     logger.info('Updating csv file for image found = %s', ls)
     # when images are found
     if ls:
-        with open('destination/results.csv', 'a') as output:
+        with open(target_file, 'a') as output:
             writer = csv.writer(output)
             out = [identifier, dic[identifier], 'Found']
             writer.writerow(out)
 
     # when images are not found
     else: 
-        with open('destination/results.csv', 'a') as output:
+        with open(target_file, 'a') as output:
             writer = csv.writer(output)
             out = [identifier, dic[identifier], 'Missing']
             writer.writerow(out)
