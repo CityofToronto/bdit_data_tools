@@ -61,19 +61,13 @@ def copy_file(identifier, dic, yr, mth):
             ls.append(file_name)
 
     logger.info('Updating csv file for image found = %s', ls)
-    # when images are found
-    if ls:
-        with open(target_file, 'a') as output:
-            writer = csv.writer(output)
+    with open(target_file, 'a') as output:
+        writer = csv.writer(output)
+        if ls: # when image is found
             out = [identifier, dic[identifier], 'Found']
-            writer.writerow(out)
-
-    # when images are not found
-    else: 
-        with open(target_file, 'a') as output:
-            writer = csv.writer(output)
-            out = [identifier, dic[identifier], 'Missing']
-            writer.writerow(out)
+        else: # when image is not found
+            out = [identifier, dic[identifier], 'Missing']   
+        writer.writerow(out)
 
 if __name__ == '__main__':
     get_date()
