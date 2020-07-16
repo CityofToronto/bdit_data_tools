@@ -26,16 +26,16 @@ def get_date():
     with open(source_file,'r') as lookuplist:
         next(lookuplist) # to skip header
         reader = csv.reader(lookuplist)
-        dic = {rows[0]:rows[1] for rows in reader}
-        ids = dic.keys()
 
-        for identifier in ids:
-            date_found = dic.get(str(identifier))
+        for row in reader:
+            dic = {row[0]:row[1]} # as I need this dic for the next function
+            identifier = row[0]
+            date_found = row[1]
             logger.info('Pulling for identifier = %s', identifier)
             date = datetime.datetime.strptime(str(date_found), '%d-%b-%y').date()
-            #accdate = date.strftime("%Y-%m-%d")
             yr =  date.strftime('%Y')
             mth =  date.strftime('%m')
+            logger.debug('Date found = %s', date)
 
             try:
                 copy_file(identifier, dic, yr, mth)
@@ -55,18 +55,17 @@ def copy_file(identifier, dic, yr, mth):
     for file_name in src_folder:
         # only copy files where filename = identifier
         if file_name.split('.')[0] == identifier:
-            # to get full file path
-            full_file_name = os.path.join(file_path, file_name)
+            full_file_name = os.path.join(file_path, file_name) # to get full file path
             shutil.copy(full_file_name, dest)
             ls.append(file_name)
 
     logger.info('Updating csv file for image found = %s', ls)
-    with open(target_file, 'a') as output:
+    with open(target_file, 'a') as output: # appending the target file
         writer = csv.writer(output)
-        if ls: # when image is found
-            out = [identifier, dic[identifier], 'Found']
-        else: # when image is not found
-            out = [identifier, dic[identifier], 'Missing']   
+        if ls: 
+            out = [identifier, dic[identifier], 'Found'] # when image is found
+        else: 
+            out = [identifier, dic[identifier], 'Missing']  # when image is not found
         writer.writerow(out)
 
 if __name__ == '__main__':
