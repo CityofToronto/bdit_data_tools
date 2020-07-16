@@ -32,7 +32,8 @@ def get_date():
             identifier = row[0]
             date_found = row[1]
             logger.info('Pulling for identifier = %s', identifier)
-            date = datetime.datetime.strptime(str(date_found), '%d-%b-%y').date()
+            date = datetime.datetime.strptime(str(date_found), '%d-%b-%y').date() # if date format is '10-Apr-17'
+            #date = datetime.datetime.strptime(str(date_found), '%m/%d/%Y') .date() # if date format is '04/10/17'
             yr =  date.strftime('%Y')
             mth =  date.strftime('%m')
             logger.debug('Date found = %s', date)
