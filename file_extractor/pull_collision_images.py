@@ -18,8 +18,8 @@ logger=logger()
 logger.debug('Start')
 
 # DEFINE SOURCE AND TARGET FILE
-source_file = 'Collision Test/lookup.csv'
-target_file = 'destination/results.csv'
+source_file = 'K:/tra/GM Office/Big Data Group/Work/Collision Image Puller/Batch01.csv'
+target_file = 'K:/tra/GM Office/Big Data Group/Work/Collision Image Puller/destination/results.csv'
 
 # GET IDENTIFIER & DATE INFORMATION FROM LOOKUP TABLE
 def get_date():
@@ -28,26 +28,27 @@ def get_date():
         reader = csv.reader(lookuplist)
 
         for row in reader:
-            dic = {row[0]:row[1]} # as I need this dic for the next function
-            identifier = row[0]
-            date_found = row[1]
+            project_id = row[0]
+            identifier = row[1]
+            date_found = row[2]
             logger.info('Pulling for identifier = %s', identifier)
-            date = datetime.datetime.strptime(str(date_found), '%d-%b-%y').date() # if date format is '10-Apr-17'
-            #date = datetime.datetime.strptime(str(date_found), '%m/%d/%Y') .date() # if date format is '04/10/17'
-            yr =  date.strftime('%Y')
-            mth =  date.strftime('%m')
-            logger.debug('Date found = %s', date)
 
             try:
-                copy_file(identifier, dic, yr, mth)
+                copy_file(project_id, identifier, date_found) #dic, yr, mth)
             except Exception:
                 logger.critical(traceback.format_exc())
 
 # NAVIGATE TO THE FILE AND COPY FILES & INDICATE IN THE OUTPUT CSV FILE
-def copy_file(identifier, dic, yr, mth):
-    logger.info('Navigating to folder where year = %s and month = %s' %(yr, mth))
-    file_path = '/home/jchew/local/file_extractor/Collision Test/' + yr + '/' + mth + '/'
-    dest = '/home/jchew/local/file_extractor/destination/'
+def copy_file(project_id, identifier, date_found):
+    # date = datetime.datetime.strptime(str(date_found), '%d-%b-%y').date() # if date format is '10-Apr-17'
+    date = datetime.datetime.strptime(str(date_found), '%m/%d/%Y') .date() # if date format is '04/10/17'
+    yr =  date.strftime('%Y')
+    mth =  date.strftime('%m')
+    logger.debug('Navigating to folder where year = %s and month = %s' %(yr, mth))
+
+    #\\tssrv7\CrashData\DataBase\
+    file_path = '//tssrv7/CrashData/DataBase/' + yr + '/' + mth + '/'
+    dest = 'K:/tra/GM Office/Big Data Group/Work/Collision Image Puller/destination/' + project_id + '/'
 
     # to get list of files in the folder
     src_folder = os.listdir(file_path) 
@@ -61,12 +62,12 @@ def copy_file(identifier, dic, yr, mth):
             ls.append(file_name)
 
     logger.info('Updating csv file for image found = %s', ls)
-    with open(target_file, 'a') as output: # appending the target file
+    with open(target_file, 'a', newline='') as output: # appending the target file & make sure no empty line/row between each resulting row
         writer = csv.writer(output)
         if ls: 
-            out = [identifier, dic[identifier], 'Found'] # when image is found
+            out = [project_id, identifier, date_found, 'Found'] # when image is found
         else: 
-            out = [identifier, dic[identifier], 'Missing']  # when image is not found
+            out = [project_id, identifier, date_found, 'Missing']  # when image is not found
         writer.writerow(out)
 
 if __name__ == '__main__':
