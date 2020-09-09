@@ -1,6 +1,6 @@
 # File Extractor
 
-The [Python script](/pull_collision_images.py) in this folder is used to pull collision images from L Drive based on the `identifiers` and `dates` from a csv file provided. 
+The [Python script](pull_collision_images.py) in this folder is used to pull collision images from L Drive based on the `identifiers` and `dates` from a csv file provided. 
 It will first find the image from certain folders based on the year and month from the `date` given as well as the `identifier`, copy the found image to a destination folder 
 and lastly in a new csv file, record down the status of whether the image was found or missing.
 However, it is very customizable where one can change the source file or target file or file path or date format etc. More will be discussed below.
