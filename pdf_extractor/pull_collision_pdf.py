@@ -17,6 +17,10 @@ def logger():
 logger=logger()
 logger.debug('Start')
 
+# start script execution timer
+startTime = datetime.datetime.now()
+print('Start Time: ' + str(startTime))
+
 # Define K-drive path and names of lookup table, destination file
 k_path='K:/Work/Ad-Hoc Analyses/Collision PDF Puller/'
 # lookup_file = k_path + 'LOOKUP_TABLE/Yonge_Gerrard_Davisville.csv'
@@ -42,6 +46,9 @@ def get_date():
                 copy_file(identifier, date_found)
             except Exception:
                 logger.critical(traceback.format_exc())
+
+    # end time
+    print('Time elapsed: ' + str(datetime.datetime.now() - startTime))
 
 # NAVIGATE TO THE FILE AND COPY FILES & INDICATE IN THE OUTPUT CSV FILE
 def copy_file(identifier, date_found):
