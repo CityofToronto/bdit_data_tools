@@ -21,7 +21,9 @@ logger.debug('Start')
 startTime = datetime.datetime.now()
 print('Start Time: ' + str(startTime))
 
-# Define K-drive path for lookup table and destination (results) file
+#---------------------------------------------------------------
+# Define file paths and file names
+# K-drive path for lookup table and destination (results) file
 k_path='K:/Work/Ad-Hoc Analyses/Collision PDF Puller/'
 lookup_file = k_path + 'LOOKUP_TABLE/Yonge_Gerrard_Davisville.csv'
 
@@ -31,6 +33,7 @@ dest_file = dest_path + 'results.csv'
 
 # Folder containing data files to search through
 data_path = '//tssrv7/CollisionsProcessed/Backup/PdfProcessed/'
+#---------------------------------------------------------------
 
 # GET IDENTIFIER & DATE INFORMATION FROM LOOKUP TABLE
 def get_date():
@@ -71,6 +74,7 @@ def get_date():
 
 # NAVIGATE TO THE FILE AND COPY FILES & INDICATE IN THE OUTPUT CSV FILE
 def copy_file(identifier, date_found):
+    # Check if date format follows the specification below:
     dt=datetime.datetime.strptime(date_found, '%m/%d/%Y %H:%M')
     this_date=str(datetime.date(dt.year, dt.month, dt.day))
 
