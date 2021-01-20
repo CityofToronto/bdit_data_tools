@@ -21,18 +21,20 @@ logger.debug('Start')
 startTime = datetime.datetime.now()
 print('Start Time: ' + str(startTime))
 
-# Define K-drive path and names of lookup table, destination file
+# Define K-drive path for lookup table and destination (results) file
 k_path='K:/Work/Ad-Hoc Analyses/Collision PDF Puller/'
-# lookup_file = k_path + 'LOOKUP_TABLE/Yonge_Gerrard_Davisville.csv'
-lookup_file = k_path + 'LOOKUP_TABLE/test.csv'
+lookup_file = k_path + 'LOOKUP_TABLE/Yonge_Gerrard_Davisville.csv'
 
+# Names of lookup table, destination file
 dest_path=k_path + 'destination/'
 dest_file = dest_path + 'results.csv'
 
+# Folder containing data files to search through
 data_path = '//tssrv7/CollisionsProcessed/Backup/PdfProcessed/'
 
 # GET IDENTIFIER & DATE INFORMATION FROM LOOKUP TABLE
 def get_date():
+    min_yr=50 # i.e. if earliest file to be retrieved is from 2015, min_yr = 50
     with open(lookup_file,'r') as lookuplist:
         next(lookuplist) # to skip header
         reader = csv.reader(lookuplist)
@@ -40,6 +42,23 @@ def get_date():
         for row in reader:
             identifier = row[0]
             date_found = row[1]
+
+            # File names to look for have a prefix that depends on
+            # what the first 2 digits of the identifier are.
+            # The logic below will append "15" if the first 2 digits are 15
+            # (and similarly for 16, 17, 18, 19)
+            # and will append "50" if the first 2 digits are 50
+            # (and similarly for 60, 70, 80, 90)
+            # If the date range of the files to be found are after 2019
+            # or before 2015, this logic needs to be modified.
+            this_yr=int(identifier[:2])
+            if this_yr >=min_yr:
+                pref=str(1) + str(this_yr)[:1]
+            else:
+                pref=str(this_yr)
+                
+            identifier=pref+str(this_yr)+identifier[2:]
+
             logger.info('Pulling for identifier = %s', identifier)
 
             try:
