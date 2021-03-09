@@ -18,8 +18,8 @@ logger=logger()
 logger.debug('Start')
 
 # DEFINE SOURCE AND TARGET FILE
-source_file = 'K:/tra/GM Office/Big Data Group/Work/Collision Image Puller/Batch01.csv'
-target_file = 'K:/tra/GM Office/Big Data Group/Work/Collision Image Puller/destination/results.csv'
+source_file = 'K:/tra/GM Office/Big Data Group/Work/Ad-Hoc Analyses/Collision Image Puller/Batch01.csv'
+target_file = 'K:/tra/GM Office/Big Data Group/Work/Ad-Hoc Analyses/Collision Image Puller/destination/results.csv'
 
 # GET IDENTIFIER & DATE INFORMATION FROM LOOKUP TABLE
 def get_date():
